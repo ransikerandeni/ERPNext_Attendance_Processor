@@ -1,7 +1,7 @@
 import frappe
 from frappe.utils import getdate, nowdate, add_days, get_first_day
 
-from attendance_processor.attendance_processor.utils.processor import (
+from attendance_processor.utils.processor import (
     get_attendance_records,
     get_missed_requests_lookup,
     get_leave_applications_lookup,
@@ -9,7 +9,7 @@ from attendance_processor.attendance_processor.utils.processor import (
     get_two_late_lookup,
     analyse_employee,
 )
-from attendance_processor.attendance_processor.utils.email_report import (
+from attendance_processor.utils.email_report import (
     send_summary_email,
 )
 
