@@ -72,7 +72,7 @@ def _build_emp_data(all_records):
 # ---------------------------------------------------------------------------
 
 @frappe.whitelist()
-def get_attendance_analysis(from_date, to_date, employee=None):
+def get_attendance_analysis(from_date, to_date, employees=None):
     """
     Run the 4-check attendance analysis for the given period and return
     JSON-serialisable results.  Called by the Attendance Summary Report page.
@@ -80,34 +80,27 @@ def get_attendance_analysis(from_date, to_date, employee=None):
     Args:
         from_date: str  "YYYY-MM-DD"
         to_date:   str  "YYYY-MM-DD"
-        employee:  str  optional employee ID — analyse one employee only
+        employees: str  JSON list of employee IDs to restrict analysis to;
+                        pass an empty list or omit to analyse all.
 
     Returns:
-        List of dicts, one per active employee, sorted by issue count desc:
-        [
-          {
-            "employee_id":   str,
-            "employee_name": str,
-            "total_issues":  int,
-            "issues": {
-              "missed_attendance_request": [...serialised records...],
-              "leave_application":         [...],
-              "short_leave_application":   [...],
-              "two_late_to_half_day":      [...],
-            }
-          },
-          ...
-        ]
+        List of dicts, one per active employee, sorted by issue count desc.
     """
+    import json
     from_date = getdate(from_date)
     to_date   = getdate(to_date)
+
+    employees_list = None
+    if employees:
+        raw = json.loads(employees) if isinstance(employees, str) else employees
+        employees_list = [e for e in raw if e] or None
 
     missed_lookup      = get_missed_requests_lookup(from_date, to_date)
     leave_lookup       = get_leave_applications_lookup(from_date, to_date)
     short_leave_lookup = get_short_leave_lookup(from_date, to_date)
     two_late_lookup    = get_two_late_lookup(from_date, to_date)
     all_records        = get_attendance_records(from_date, to_date,
-                                                employee=employee or None)
+                                                employees=employees_list)
 
     emp_data = _build_emp_data(all_records)
 
@@ -147,23 +140,30 @@ def get_attendance_analysis(from_date, to_date, employee=None):
 
 @frappe.whitelist()
 def send_attendance_emails(from_date, to_date, employee=None,
-                           send_even_if_no_issues=0):
+                           send_even_if_no_issues=0,
+                           selected_employees=None):
     """
     Enqueue a background job to send attendance summary emails for the period.
     Returns immediately; emails are sent asynchronously.
     Restricted to users with the System Manager role.
 
     Args:
-        from_date:               str  "YYYY-MM-DD"
-        to_date:                 str  "YYYY-MM-DD"
-        employee:                str  optional — send to one employee only
-        send_even_if_no_issues:  int  1 to email employees with no issues too
+        from_date:               str   "YYYY-MM-DD"
+        to_date:                 str   "YYYY-MM-DD"
+        employee:                str   optional — send to one employee only
+        send_even_if_no_issues:  int   1 to email employees with no issues too
+        selected_employees:      str   JSON list of employee IDs to restrict sending to
 
     Returns:
         {"status": "queued", "message": str}
     """
+    import json
     if "System Manager" not in frappe.get_roles():
         frappe.throw(frappe._("Not permitted"), frappe.PermissionError)
+
+    allowed = None
+    if selected_employees:
+        allowed = json.loads(selected_employees) if isinstance(selected_employees, str) else selected_employees
 
     frappe.enqueue(
         "attendance_processor.attendance_processor.utils.api._do_send_emails",
@@ -171,15 +171,83 @@ def send_attendance_emails(from_date, to_date, employee=None,
         to_date=to_date,
         employee=employee or None,
         send_even_if_no_issues=cint(send_even_if_no_issues),
+        selected_employees=allowed,
         queue="long",
         timeout=3600,
     )
-    scope = f"employee {employee}" if employee else "all active employees"
+    count = len(allowed) if allowed is not None else "all selected"
     return {
         "status":  "queued",
-        "message": f"Email job queued for {from_date} to {to_date} ({scope}). "
+        "message": f"Email job queued for {from_date} to {to_date} "
+                   f"({count} employee(s)). "
                    "Emails will be delivered in the background.",
     }
+
+
+@frappe.whitelist()
+def get_email_send_preview(from_date, to_date, employees=None):
+    """
+    Return the list of employees who would receive an email if Send Emails
+    were triggered right now: active employees with at least one issue.
+    Restricted to System Manager.
+
+    Returns:
+        List of dicts: [{employee_id, employee_name, email, issue_count}, ...]
+    """
+    import json
+    if "System Manager" not in frappe.get_roles():
+        frappe.throw(frappe._("Not permitted"), frappe.PermissionError)
+
+    from_date = getdate(from_date)
+    to_date   = getdate(to_date)
+
+    employees_list = None
+    if employees:
+        raw = json.loads(employees) if isinstance(employees, str) else employees
+        employees_list = [e for e in raw if e] or None
+
+    missed_lookup      = get_missed_requests_lookup(from_date, to_date)
+    leave_lookup       = get_leave_applications_lookup(from_date, to_date)
+    short_leave_lookup = get_short_leave_lookup(from_date, to_date)
+    two_late_lookup    = get_two_late_lookup(from_date, to_date)
+    all_records        = get_attendance_records(from_date, to_date,
+                                                employees=employees_list)
+
+    emp_data   = _build_emp_data(all_records)
+    active_ids = _get_active_employee_ids()
+
+    # Batch-fetch email (user_id) for all active candidates in one query
+    candidate_ids = [eid for eid in emp_data if eid in active_ids]
+    email_map = {
+        r.name: r.user_id
+        for r in frappe.get_all(
+            "Employee",
+            filters={"name": ["in", candidate_ids]},
+            fields=["name", "user_id"],
+        )
+    } if candidate_ids else {}
+
+    recipients = []
+    for emp_id, data in emp_data.items():
+        if emp_id not in active_ids:
+            continue
+        issues = analyse_employee(
+            emp_id, data["records"],
+            missed_lookup, leave_lookup,
+            short_leave_lookup, two_late_lookup,
+        )
+        total_issues = sum(len(v) for v in issues.values())
+        if total_issues == 0:
+            continue
+        recipients.append({
+            "employee_id":   emp_id,
+            "employee_name": data["name"],
+            "email":         email_map.get(emp_id) or "",
+            "issue_count":   total_issues,
+        })
+
+    recipients.sort(key=lambda x: (x["employee_name"] or "").lower())
+    return recipients
 
 
 # ---------------------------------------------------------------------------
@@ -187,10 +255,12 @@ def send_attendance_emails(from_date, to_date, employee=None,
 # ---------------------------------------------------------------------------
 
 def _do_send_emails(from_date, to_date, employee=None,
-                    send_even_if_no_issues=False, period_label=None):
+                    send_even_if_no_issues=False, period_label=None,
+                    selected_employees=None):
     """
     Background worker: runs the full attendance analysis and sends summary
     emails.  Errors per employee are logged and do not abort other employees.
+    selected_employees: optional list of employee IDs — only these are emailed.
     """
     from_date = getdate(from_date)
     to_date   = getdate(to_date)
@@ -205,11 +275,14 @@ def _do_send_emails(from_date, to_date, employee=None,
     all_records        = get_attendance_records(from_date, to_date,
                                                 employee=employee)
 
-    emp_data = _build_emp_data(all_records)
+    emp_data   = _build_emp_data(all_records)
     active_ids = _get_active_employee_ids(employee=employee)
+    allowed    = set(selected_employees) if selected_employees else None
 
     for emp_id, data in emp_data.items():
         if emp_id not in active_ids:
+            continue
+        if allowed is not None and emp_id not in allowed:
             continue
         try:
             issues = analyse_employee(

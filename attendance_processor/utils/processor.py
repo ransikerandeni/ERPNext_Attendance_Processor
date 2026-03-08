@@ -19,16 +19,19 @@ TWO_LATE_MONTHLY_LIMIT    = 2
 # Data Loaders
 # ---------------------------------------------------------------------------
 
-def get_attendance_records(from_date, to_date, employee=None):
+def get_attendance_records(from_date, to_date, employee=None, employees=None):
     """
     Return a flat list of Attendance records for the given period.
     Cancelled records (docstatus=2) are excluded at the DB level.
+    Pass `employees` (list) to filter by multiple IDs, or `employee` (str) for one.
     """
     filters = [
         ["attendance_date", "between", [from_date, to_date]],
         ["docstatus", "!=", 2],
     ]
-    if employee:
+    if employees:
+        filters.append(["employee", "in", employees])
+    elif employee:
         filters.append(["employee", "=", employee])
 
     return frappe.db.get_all(
