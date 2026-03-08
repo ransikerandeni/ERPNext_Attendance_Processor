@@ -169,7 +169,7 @@ class AttendanceSummaryReport {
 		}
 
 		frappe.call({
-			method: "attendance_processor.attendance_processor.utils.api.get_attendance_analysis",
+			method: "attendance_processor.utils.api.get_attendance_analysis",
 			args:   { from_date: from, to_date: to, employee: employee || "" },
 			freeze: true,
 			freeze_message: __("Analysing attendance records…"),
@@ -643,7 +643,7 @@ class AttendanceSummaryReport {
 
 	_do_send(from, to, employee) {
 		frappe.call({
-			method: "attendance_processor.attendance_processor.utils.api.send_attendance_emails",
+			method: "attendance_processor.utils.api.send_attendance_emails",
 			args: {
 				from_date: from,
 				to_date:   to,
