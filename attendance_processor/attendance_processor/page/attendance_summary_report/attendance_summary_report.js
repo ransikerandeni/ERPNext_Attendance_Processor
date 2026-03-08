@@ -21,6 +21,7 @@ class AttendanceSummaryReport {
 		this.filtered_data = []; // after client-side search
 		this.sort_order = "issues_desc";
 		this._setting_dates = false; // prevents change-event loops
+		this.selected_employees = []; // multi-employee filter list
 
 		this._setup_filter_bar();
 		this._setup_actions();
@@ -73,10 +74,87 @@ class AttendanceSummaryReport {
 		});
 
 		this.f_employee = this.page.add_field({
-			label: __("Employee"),
+			label: __("Add Employee"),
 			fieldname: "employee",
 			fieldtype: "Link",
 			options: "Employee",
+			change() {
+				var val = me.f_employee.get_value();
+				if (val) {
+					me._add_selected_employee(val);
+					// Clear the field so user can add another
+					setTimeout(() => me.f_employee.set_value(""), 0);
+				}
+			},
+		});
+	}
+
+	// ─── Multi-employee tag picker ─────────────────────────────────────────
+
+	_add_selected_employee(emp_id) {
+		emp_id = (emp_id || "").trim();
+		if (!emp_id) return;
+		if (!this.selected_employees.includes(emp_id)) {
+			this.selected_employees.push(emp_id);
+			this._render_emp_pills();
+		}
+	}
+
+	_render_emp_pills() {
+		var me   = this;
+		var $wrap = this.$emp_tags_wrap;
+		$wrap.empty();
+
+		if (!this.selected_employees.length) {
+			$wrap.append(
+				`<span style="font-size:12px;color:#aaa;font-style:italic;">
+					${__("No employee filter — showing all")}
+				</span>`
+			);
+			return;
+		}
+
+		$wrap.append(
+			`<span style="font-size:12px;color:#666;margin-right:2px;flex-shrink:0;">
+				${__("Employees")}:
+			</span>`
+		);
+
+		this.selected_employees.forEach(emp => {
+			$wrap.append(`
+				<span class="ap-emp-pill"
+				      style="display:inline-flex;align-items:center;gap:3px;
+				             background:#E8F0FE;color:#1558D6;
+				             border:1px solid #C5D8F6;border-radius:20px;
+				             padding:2px 10px 2px 10px;font-size:12px;font-weight:500;">
+					${frappe.utils.escape_html(emp)}
+					<span class="ap-pill-remove" data-emp="${frappe.utils.escape_html(emp)}"
+					      style="cursor:pointer;font-size:15px;line-height:1;
+					             color:#888;margin-left:3px;" title="${__('Remove')}">
+						&times;
+					</span>
+				</span>
+			`);
+		});
+
+		if (this.selected_employees.length > 1) {
+			$wrap.append(
+				`<span class="ap-pill-clear-all"
+				      style="font-size:11px;color:#888;cursor:pointer;
+				             text-decoration:underline;margin-left:4px;flex-shrink:0;">
+					${__("Clear all")}
+				</span>`
+			);
+		}
+
+		$wrap.find(".ap-pill-remove").on("click", function () {
+			var emp = $(this).data("emp");
+			me.selected_employees = me.selected_employees.filter(e => e !== emp);
+			me._render_emp_pills();
+		});
+		$wrap.find(".ap-pill-clear-all").on("click", function () {
+			me.selected_employees = [];
+			me._render_emp_pills();
 		});
 	}
 
@@ -131,6 +209,13 @@ class AttendanceSummaryReport {
 		this.$wrap = $(`
 			<div class="ap-report-wrap" style="padding:0 20px 60px;">
 
+				<div class="ap-emp-tags-wrap"
+				     style="display:flex;flex-wrap:wrap;align-items:center;
+				            gap:6px;padding:10px 0 8px;
+				            border-bottom:1px solid #eee;margin-bottom:12px;
+				            min-height:36px;">
+				</div>
+
 				<div class="ap-empty-state text-center text-muted"
 				     style="padding:80px 0 60px;">
 					<div style="font-size:52px;margin-bottom:14px;">&#x1F4CB;</div>
@@ -143,15 +228,17 @@ class AttendanceSummaryReport {
 				<div class="ap-results" style="display:none;"></div>
 			</div>
 		`).appendTo($(this.page.main));
+
+		this.$emp_tags_wrap = this.$wrap.find(".ap-emp-tags-wrap");
+		this._render_emp_pills();
 	}
 
 	// ─── Data load ─────────────────────────────────────────────────────────
 
 	_load_data() {
-		var me       = this;
-		var from     = this.f_from.get_value();
-		var to       = this.f_to.get_value();
-		var employee = this.f_employee.get_value();
+		var me   = this;
+		var from = this.f_from.get_value();
+		var to   = this.f_to.get_value();
 
 		if (!from || !to) {
 			frappe.msgprint({
@@ -172,7 +259,8 @@ class AttendanceSummaryReport {
 
 		frappe.call({
 			method: "attendance_processor.utils.api.get_attendance_analysis",
-			args:   { from_date: from, to_date: to, employee: employee || "" },
+			args:   { from_date: from, to_date: to,
+			          employees: JSON.stringify(this.selected_employees) },
 			freeze: true,
 			freeze_message: __("Analysing attendance records…"),
 			callback(r) {
@@ -604,10 +692,9 @@ class AttendanceSummaryReport {
 	// ─── Send-emails flow ───────────────────────────────────────────────────
 
 	_confirm_send() {
-		var me       = this;
-		var from     = this.f_from.get_value();
-		var to       = this.f_to.get_value();
-		var employee = this.f_employee.get_value();
+		var me   = this;
+		var from = this.f_from.get_value();
+		var to   = this.f_to.get_value();
 
 		if (!from || !to) {
 			frappe.msgprint({
@@ -618,38 +705,183 @@ class AttendanceSummaryReport {
 			return;
 		}
 
-		var scope = employee
-			? `employee <strong>${frappe.utils.escape_html(employee)}</strong>`
-			: `<strong>${__("all active employees")}</strong>`;
-
-		var preview_note = this.data.length
-			? `<br><br><span style="color:#888; font-size:12px;">
-				${__("The current preview shows")} <strong>${
-					this.data.filter(e => e.total_issues > 0).length
-				}</strong> ${__("employee(s) with issues.")}
-			   </span>`
-			: "";
-
-		frappe.confirm(
-			`${__("Send attendance summary emails to")} ${scope}
-			 ${__("for the period")}
-			 <strong>${frappe.utils.escape_html(from)}</strong>
-			 ${__("to")}
-			 <strong>${frappe.utils.escape_html(to)}</strong>?
-			 <br><br>
-			 ${__("Only <strong>active</strong> employees who have at least one uncovered attendance issue will receive an email. Inactive, resigned, or left employees are excluded.")}
-			 ${preview_note}`,
-			function () { me._do_send(from, to, employee); }
-		);
+		// Fetch the exact recipient list first, then show a confirmation dialog
+		frappe.call({
+			method: "attendance_processor.utils.api.get_email_send_preview",
+			args:   { from_date: from, to_date: to,
+			          employees: JSON.stringify(this.selected_employees) },
+			freeze: true,
+			freeze_message: __("Preparing email preview…"),
+			callback(r) {
+				if (r.message !== undefined) {
+					me._show_send_dialog(from, to, r.message);
+				}
+			},
+		});
 	}
 
-	_do_send(from, to, employee) {
+	_show_send_dialog(from, to, recipients) {
+		var me = this;
+
+		if (!recipients.length) {
+			frappe.msgprint({
+				title:     __("No Emails to Send"),
+				message:   __("No active employees with attendance issues were found for this period."),
+				indicator: "blue",
+			});
+			return;
+		}
+
+		// Build table rows with a checkbox per row
+		var rows_html = recipients.map((r, i) => `
+			<tr class="ap-recv-row" data-emp="${frappe.utils.escape_html(r.employee_id)}"
+			    style="background:${i % 2 === 0 ? "#f9f9f9" : "#fff"}; cursor:pointer;">
+				<td style="padding:7px 10px;border:1px solid #eee;text-align:center;width:36px;">
+					<input type="checkbox" class="ap-recv-chk"
+					       data-emp="${frappe.utils.escape_html(r.employee_id)}"
+					       checked style="cursor:pointer;width:14px;height:14px;">
+				</td>
+				<td style="padding:7px 10px;border:1px solid #eee;font-size:12px;">
+					${frappe.utils.escape_html(r.employee_id)}
+				</td>
+				<td style="padding:7px 10px;border:1px solid #eee;font-size:12px;font-weight:500;">
+					${frappe.utils.escape_html(r.employee_name)}
+				</td>
+				<td style="padding:7px 10px;border:1px solid #eee;font-size:12px;color:#2980B9;">
+					${frappe.utils.escape_html(r.email || "\u2014")}
+				</td>
+				<td style="padding:7px 10px;border:1px solid #eee;font-size:12px;
+				           text-align:center;font-weight:600;color:#C0392B;">
+					${r.issue_count}
+				</td>
+			</tr>
+		`).join("");
+
+		var table_html = `
+			<div style="margin-bottom:10px;font-size:13px;color:#444;line-height:1.5;">
+				${__("The following")} <strong>${recipients.length}</strong>
+				${__("employee(s) have attendance issues for the period")}
+				<strong>${frappe.utils.escape_html(from)}</strong> ${__("to")}
+				<strong>${frappe.utils.escape_html(to)}</strong>.
+				${__("Select the employees you want to email.")}
+			</div>
+
+			<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+				<button class="btn btn-xs btn-default ap-select-all">${__("Select All")}</button>
+				<button class="btn btn-xs btn-default ap-unselect-all">${__("Unselect All")}</button>
+				<span class="ap-sel-count" style="font-size:12px;color:#888;
+				      margin-left:4px;">
+					<span class="ap-sel-num">${recipients.length}</span>
+					/ ${recipients.length} ${__("selected")}
+				</span>
+			</div>
+
+			<div style="max-height:360px;overflow-y:auto;
+			            border:1px solid #ddd;border-radius:4px;">
+				<table style="width:100%;border-collapse:collapse;">
+					<thead>
+						<tr style="background:#2F5496;color:#fff;">
+							<th style="padding:8px 10px;text-align:center;font-size:12px;width:36px;
+							           border:1px solid rgba(255,255,255,.2);">
+								<input type="checkbox" id="ap-chk-header" checked
+								       style="cursor:pointer;width:14px;height:14px;" title="${__("Toggle all")}">
+							</th>
+							<th style="padding:8px 10px;text-align:left;font-size:12px;
+							           border:1px solid rgba(255,255,255,.2);">${__("Employee ID")}</th>
+							<th style="padding:8px 10px;text-align:left;font-size:12px;
+							           border:1px solid rgba(255,255,255,.2);">${__("Name")}</th>
+							<th style="padding:8px 10px;text-align:left;font-size:12px;
+							           border:1px solid rgba(255,255,255,.2);">${__("Email")}</th>
+							<th style="padding:8px 10px;text-align:center;font-size:12px;
+							           border:1px solid rgba(255,255,255,.2);">${__("Issues")}</th>
+						</tr>
+					</thead>
+					<tbody>${rows_html}</tbody>
+				</table>
+			</div>
+			<div style="margin-top:8px;font-size:11px;color:#999;">
+				${__("Employees shown as \u2014 for email have no linked ERPNext user and will be skipped.")}
+			</div>
+		`;
+
+		var d = new frappe.ui.Dialog({
+			title: __("Confirm: Send Attendance Emails"),
+			size:  "large",
+			fields: [
+				{
+					fieldtype: "HTML",
+					fieldname: "preview_html",
+					options:   table_html,
+				},
+			],
+			primary_action_label: __("Send Emails"),
+			primary_action() {
+				var selected = [];
+				d.$wrapper.find(".ap-recv-chk:checked").each(function () {
+					selected.push($(this).data("emp"));
+				});
+				if (!selected.length) {
+					frappe.msgprint({
+						title:     __("No Selection"),
+						message:   __("Please select at least one employee to send emails to."),
+						indicator: "orange",
+					});
+					return;
+				}
+				d.hide();
+				me._do_send(from, to, selected);
+			},
+		});
+		d.show();
+
+		// ── Wire interactivity after dialog renders ──────────────────────
+		var $w = d.$wrapper;
+
+		// Helper: refresh the "N / total selected" counter
+		function _update_count() {
+			var n = $w.find(".ap-recv-chk:checked").length;
+			$w.find(".ap-sel-num").text(n);
+			// sync header checkbox state
+			var total = $w.find(".ap-recv-chk").length;
+			$w.find("#ap-chk-header").prop("indeterminate", n > 0 && n < total)
+									 .prop("checked", n === total);
+		}
+
+		// Row checkbox changes
+		$w.on("change", ".ap-recv-chk", _update_count);
+
+		// Clicking the row itself toggles the checkbox
+		$w.on("click", ".ap-recv-row", function (e) {
+			if ($(e.target).is("input[type=checkbox]")) return; // let native handle it
+			var $chk = $(this).find(".ap-recv-chk");
+			$chk.prop("checked", !$chk.prop("checked"));
+			_update_count();
+		});
+
+		// Header checkbox toggles all
+		$w.on("change", "#ap-chk-header", function () {
+			$w.find(".ap-recv-chk").prop("checked", this.checked);
+			_update_count();
+		});
+
+		// Select All / Unselect All buttons
+		$w.find(".ap-select-all").on("click", function () {
+			$w.find(".ap-recv-chk").prop("checked", true);
+			_update_count();
+		});
+		$w.find(".ap-unselect-all").on("click", function () {
+			$w.find(".ap-recv-chk").prop("checked", false);
+			_update_count();
+		});
+	}
+
+	_do_send(from, to, selected_employees) {
 		frappe.call({
 			method: "attendance_processor.utils.api.send_attendance_emails",
 			args: {
-				from_date: from,
-				to_date:   to,
-				employee:  employee || "",
+				from_date:          from,
+				to_date:            to,
+				selected_employees: JSON.stringify(selected_employees || []),
 			},
 			freeze: true,
 			freeze_message: __("Queuing email job…"),
