@@ -118,9 +118,11 @@ class AttendanceSummaryReport {
 			me._load_data();
 		}, "search");
 
-		this.page.add_button(__("Send Emails"), function () {
-			me._confirm_send();
-		}, { btn_class: "btn-warning" });
+		if (frappe.user_roles.includes("System Manager")) {
+			this.page.add_button(__("Send Emails"), function () {
+				me._confirm_send();
+			}, { btn_class: "btn-warning" });
+		}
 	}
 
 	// ─── Static shell rendered once into page.main ─────────────────────────
@@ -635,7 +637,7 @@ class AttendanceSummaryReport {
 			 ${__("to")}
 			 <strong>${frappe.utils.escape_html(to)}</strong>?
 			 <br><br>
-			 ${__("Only employees with at least one uncovered attendance issue will receive an email.")}
+			 ${__("Only <strong>active</strong> employees who have at least one uncovered attendance issue will receive an email. Inactive, resigned, or left employees are excluded.")}
 			 ${preview_note}`,
 			function () { me._do_send(from, to, employee); }
 		);

@@ -25,6 +25,14 @@ def _is_employee_active(att_records):
     return False
 
 
+def _get_active_employee_ids(employee=None):
+    """Return a set of employee IDs whose HR status is 'Active'."""
+    filters = {"status": "Active"}
+    if employee:
+        filters["name"] = employee
+    return set(frappe.get_all("Employee", filters=filters, pluck="name"))
+
+
 def _fmt_time(val):
     """Extract HH:MM:SS portion from a datetime/string; return None if absent."""
     if not val:
@@ -103,6 +111,13 @@ def get_attendance_analysis(from_date, to_date, employee=None):
 
     emp_data = _build_emp_data(all_records)
 
+    # Enforce ERPNext User Permissions: frappe.get_list applies role permissions
+    # and User Permissions automatically, so non-privileged users only see the
+    # Employee records they are permitted to access.
+    if "System Manager" not in frappe.get_roles():
+        permitted_ids = set(frappe.get_list("Employee", pluck="name"))
+        emp_data = {k: v for k, v in emp_data.items() if k in permitted_ids}
+
     results = []
     for emp_id, data in emp_data.items():
         if not _is_employee_active(data["records"]):
@@ -136,6 +151,7 @@ def send_attendance_emails(from_date, to_date, employee=None,
     """
     Enqueue a background job to send attendance summary emails for the period.
     Returns immediately; emails are sent asynchronously.
+    Restricted to users with the System Manager role.
 
     Args:
         from_date:               str  "YYYY-MM-DD"
@@ -146,6 +162,9 @@ def send_attendance_emails(from_date, to_date, employee=None,
     Returns:
         {"status": "queued", "message": str}
     """
+    if "System Manager" not in frappe.get_roles():
+        frappe.throw(frappe._("Not permitted"), frappe.PermissionError)
+
     frappe.enqueue(
         "attendance_processor.attendance_processor.utils.api._do_send_emails",
         from_date=from_date,
@@ -187,9 +206,10 @@ def _do_send_emails(from_date, to_date, employee=None,
                                                 employee=employee)
 
     emp_data = _build_emp_data(all_records)
+    active_ids = _get_active_employee_ids(employee=employee)
 
     for emp_id, data in emp_data.items():
-        if not _is_employee_active(data["records"]):
+        if emp_id not in active_ids:
             continue
         try:
             issues = analyse_employee(
