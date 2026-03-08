@@ -101,10 +101,10 @@ def get_short_leave_lookup(from_date, to_date):
 def get_two_late_lookup(from_date, to_date):
     """
     Return {employee_id: [(attendance_date, second_attendance_date_or_None), ...]}
-    for Two Late Attendance to One Half Day records.
+    for Two Late Attendance To One Half Day records.
     """
     records = frappe.db.get_all(
-        "Two Late Attendance to One Half Day",
+        "Two Late Attendance To One Half Day",
         filters=[
             ["attendance_date", "between", [from_date, to_date]],
             ["docstatus", "!=", 2],

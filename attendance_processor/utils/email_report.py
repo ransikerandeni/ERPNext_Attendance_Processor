@@ -16,7 +16,7 @@ _SECTION_LABELS = {
     "missed_attendance_request": "Missed Attendance Request",
     "leave_application":         "Leave Application",
     "short_leave_application":   "Short Leave Application",
-    "two_late_to_half_day":      "Two Late Attendance to One Half Day",
+    "two_late_to_half_day":      "Two Late Attendance To One Half Day",
 }
 
 _HEADER_COLOR = "#2F5496"  # deep blue
