@@ -1,0 +1,289 @@
+{% extends "templates/web.html" %}
+
+{% block title %}{{ _("Approver Summary") }}{% endblock %}
+
+{% block head_include %}
+<style>
+/* ── Page Layout ─────────────────────────────────────────────────────────── */
+.as-page-header {
+    background: linear-gradient(135deg, #2F5496 0%, #1e3a6e 100%);
+    color: #fff;
+    padding: 2rem 2.5rem;
+    border-radius: 8px;
+    margin-bottom: 1.75rem;
+}
+.as-page-header h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 0 0 0.3rem 0;
+    color: #fff;
+}
+.as-page-header p {
+    margin: 0;
+    opacity: 0.85;
+    font-size: 0.95rem;
+}
+
+/* ── Filter Bar ──────────────────────────────────────────────────────────── */
+.as-filter-bar {
+    background: #fff;
+    border: 1px solid #DEE2E6;
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: flex-end;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.75rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.as-filter-bar .filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+.as-filter-bar label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #495057;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.as-filter-bar input[type="date"] {
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    padding: 0.45rem 0.7rem;
+    font-size: 0.9rem;
+    color: #212529;
+    min-width: 165px;
+}
+.as-filter-bar input[type="date"]:focus {
+    outline: none;
+    border-color: #2F5496;
+    box-shadow: 0 0 0 3px rgba(47,84,150,0.15);
+}
+#generate-btn {
+    background: #2F5496;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 0.5rem 1.4rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.18s;
+    height: 36px;
+    align-self: flex-end;
+}
+#generate-btn:hover { background: #1e3a6e; }
+#generate-btn:disabled { background: #8fa9d4; cursor: not-allowed; }
+
+/* ── Spinner ─────────────────────────────────────────────────────────────── */
+#loading-spinner {
+    display: none;
+    text-align: center;
+    padding: 3rem 0;
+    color: #6c757d;
+    font-size: 0.95rem;
+}
+.spinner-ring {
+    display: inline-block;
+    width: 40px; height: 40px;
+    border: 4px solid #DEE2E6;
+    border-top-color: #2F5496;
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+    margin-bottom: 0.75rem;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Error Message ───────────────────────────────────────────────────────── */
+#error-msg {
+    display: none;
+    background: #fff5f5;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+    border-radius: 6px;
+    padding: 0.85rem 1.1rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+/* ── Approver Card ───────────────────────────────────────────────────────── */
+.approver-card {
+    background: #F8F9FA;
+    border: 1px solid #DEE2E6;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.approver-card-header {
+    background: #2F5496;
+    color: #fff;
+    padding: 0.9rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.approver-card-header h3 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #fff;
+}
+.pending-badge {
+    background: rgba(255,255,255,0.25);
+    border: 1px solid rgba(255,255,255,0.45);
+    color: #fff;
+    border-radius: 20px;
+    padding: 0.2rem 0.75rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.approver-card-body {
+    padding: 1.25rem 1.5rem;
+}
+
+/* ── Overall Summary Table ───────────────────────────────────────────────── */
+.as-overall-summary {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+}
+.as-summary-chip {
+    border-radius: 6px;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.as-summary-chip .chip-count {
+    font-size: 1.15rem;
+    font-weight: 800;
+    line-height: 1;
+}
+.chip-missed  { background: #C0392B; }
+.chip-leave   { background: #E67E22; }
+.chip-short   { background: #2980B9; }
+.chip-two-late { background: #8E44AD; }
+
+/* ── Detail Sections ─────────────────────────────────────────────────────── */
+.detail-section {
+    border-radius: 6px;
+    margin-bottom: 0.85rem;
+    overflow: hidden;
+    border: 1px solid #DEE2E6;
+}
+.detail-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.65rem 1rem;
+    cursor: pointer;
+    user-select: none;
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.88rem;
+}
+.detail-section-header .toggle-icon {
+    transition: transform 0.2s;
+    font-size: 0.75rem;
+}
+.detail-section-header.collapsed .toggle-icon {
+    transform: rotate(-90deg);
+}
+.missed-section   .detail-section-header { background: #C0392B; }
+.leave-section    .detail-section-header { background: #E67E22; }
+.short-section    .detail-section-header { background: #2980B9; }
+.two-late-section .detail-section-header { background: #8E44AD; }
+
+.detail-section-body {
+    overflow-x: auto;
+    background: #fff;
+}
+.detail-section-body.hidden { display: none; }
+
+/* ── Data Table ──────────────────────────────────────────────────────────── */
+.as-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+.as-table th {
+    background: #F1F3F5;
+    color: #495057;
+    font-weight: 700;
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 2px solid #DEE2E6;
+    white-space: nowrap;
+}
+.as-table td {
+    padding: 0.45rem 0.75rem;
+    border-bottom: 1px solid #F1F3F5;
+    color: #212529;
+    vertical-align: middle;
+}
+.as-table tr:last-child td { border-bottom: none; }
+.as-table tr:hover td { background: #f8f9fa; }
+.as-table a {
+    color: #2F5496;
+    text-decoration: none;
+    font-weight: 600;
+    font-family: monospace;
+    font-size: 0.8rem;
+}
+.as-table a:hover { text-decoration: underline; }
+
+/* ── No-Records Message ──────────────────────────────────────────────────── */
+.as-no-records {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #6c757d;
+    font-size: 1rem;
+}
+.as-no-records .no-records-icon {
+    font-size: 2.5rem;
+    display: block;
+    margin-bottom: 0.75rem;
+}
+</style>
+{% endblock %}
+
+{% block page_content %}
+<div class="as-page-header">
+    <h1>{{ _("Approver Summary") }}</h1>
+    <p>{{ _("View pending applications grouped by Leave Approver") }}</p>
+</div>
+
+<div class="as-filter-bar">
+    <div class="filter-group">
+        <label for="from-date">{{ _("From Date") }}</label>
+        <input type="date" id="from-date" name="from_date">
+    </div>
+    <div class="filter-group">
+        <label for="to-date">{{ _("To Date") }}</label>
+        <input type="date" id="to-date" name="to_date">
+    </div>
+    <button id="generate-btn">{{ _("Generate Summary") }}</button>
+</div>
+
+<div id="error-msg"></div>
+
+<div id="loading-spinner">
+    <div><div class="spinner-ring"></div></div>
+    <div>{{ _("Loading summary…") }}</div>
+</div>
+
+<div id="summary-results"></div>
+{% endblock %}
+
+{% block script %}
+<script src="/assets/attendance_processor/js/approver_summary.js"></script>
+{% endblock %}
