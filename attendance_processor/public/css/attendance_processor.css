@@ -1,0 +1,393 @@
+/* ============================================================================
+   Attendance Processor — Shared Design System
+   Included on every Frappe desk page and web page via hooks.py
+   ============================================================================ */
+
+/* ── Design Tokens ──────────────────────────────────────────────────────── */
+:root {
+    /* Brand / Primary */
+    --ap-primary:        #2563EB;
+    --ap-primary-dark:   #1D4ED8;
+    --ap-primary-light:  #EFF6FF;
+    --ap-primary-border: #BFDBFE;
+    --ap-primary-text:   #1E40AF;
+
+    /* Issue-category palette — accent + light background + dark text */
+    --ap-missed:         #DC2626;   /* red    — missed attendance  */
+    --ap-missed-light:   #FEE2E2;
+    --ap-missed-text:    #991B1B;
+    --ap-leave:          #EA580C;   /* orange — leave applications */
+    --ap-leave-light:    #FFEDD5;
+    --ap-leave-text:     #9A3412;
+    --ap-short:          #2563EB;   /* blue   — short leave        */
+    --ap-short-light:    #EFF6FF;
+    --ap-short-text:     #1E40AF;
+    --ap-two-late:       #7C3AED;   /* purple — two-late half day  */
+    --ap-two-late-light: #EDE9FE;
+    --ap-two-late-text:  #5B21B6;
+    --ap-success:        #16A34A;   /* green  — no issues          */
+    --ap-success-light:  #DCFCE7;
+    --ap-success-text:   #166534;
+
+    /* Semantic UI tokens */
+    --ap-link:           #2563EB;
+    --ap-link-hover:     #1D4ED8;
+
+    /* Neutral palette */
+    --ap-text:           #212529;
+    --ap-text-secondary: #495057;
+    --ap-text-muted:     #6c757d;
+    --ap-text-faint:     #adb5bd;
+
+    --ap-border:         #DEE2E6;
+    --ap-border-light:   #F1F3F5;
+
+    --ap-bg:             #F8F9FA;
+    --ap-bg-alt:         #F1F3F5;
+    --ap-white:          #ffffff;
+
+    /* Shadows */
+    --ap-shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.05);
+    --ap-shadow-md:      0 3px 10px rgba(37, 99, 235, 0.10);
+
+    /* Radii */
+    --ap-radius-sm:      4px;
+    --ap-radius:         6px;
+    --ap-radius-lg:      8px;
+}
+
+/* ── Employee tag pills ──────────────────────────────────────────────────── */
+.ap-emp-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: var(--ap-primary-light);
+    color: var(--ap-primary);
+    border: 1px solid var(--ap-primary-border);
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.ap-pill-remove {
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    color: var(--ap-text-muted);
+    margin-left: 3px;
+    transition: color 0.15s;
+}
+.ap-pill-remove:hover { color: var(--ap-missed); }
+
+.ap-pill-clear-all {
+    font-size: 11px;
+    color: var(--ap-text-muted);
+    cursor: pointer;
+    text-decoration: underline;
+    margin-left: 4px;
+    flex-shrink: 0;
+    transition: color 0.15s;
+}
+.ap-pill-clear-all:hover { color: var(--ap-primary); }
+
+/* ── Summary stat cards ──────────────────────────────────────────────────── */
+.ap-stat-card {
+    border: 1px solid var(--ap-border);
+    border-radius: var(--ap-radius);
+    text-align: center;
+    padding: 14px 8px;
+    background: var(--ap-white);
+    height: 100%;
+    transition: box-shadow 0.2s, transform 0.2s;
+}
+.ap-stat-card:hover {
+    box-shadow: var(--ap-shadow-md);
+    transform: translateY(-1px);
+}
+
+/* ── Employee accordion cards ───────────────────────────────────────────── */
+.ap-emp-card {
+    border: 1px solid var(--ap-border);
+    border-radius: var(--ap-radius);
+    margin-bottom: 8px;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+.ap-emp-card:hover { box-shadow: var(--ap-shadow-md); }
+
+.ap-emp-header {
+    padding: 11px 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+    transition: filter 0.15s;
+}
+.ap-emp-header:hover { filter: brightness(0.97); }
+
+.ap-emp-body {
+    border-top: 1px solid var(--ap-border);
+    background: var(--ap-white);
+}
+
+/* ── Issue-detail link (inside issue tables) ────────────────────────────── */
+a.ap-open-link {
+    font-size: 11px;
+    color: var(--ap-link);
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.15s;
+}
+a.ap-open-link:hover { color: var(--ap-link-hover); text-decoration: underline; }
+
+/* ── View-employee record link ──────────────────────────────────────────── */
+a.ap-view-emp-link {
+    font-size: 12px;
+    color: var(--ap-link);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.15s;
+}
+a.ap-view-emp-link:hover { color: var(--ap-link-hover); text-decoration: underline; }
+
+/* ── Approver cards (shared by desk + web approver summary) ─────────────── */
+.approver-card {
+    background: var(--ap-bg);
+    border: 1px solid var(--ap-border);
+    border-radius: var(--ap-radius-lg);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+    box-shadow: var(--ap-shadow-sm);
+    transition: box-shadow 0.2s;
+}
+.approver-card:hover { box-shadow: var(--ap-shadow-md); }
+
+.approver-card-header {
+    background: var(--ap-primary-light);
+    color: var(--ap-primary-text);
+    border-bottom: 1px solid var(--ap-primary-border);
+    padding: 0.9rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.approver-card-header h3 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--ap-primary-text);
+}
+.pending-badge {
+    background: var(--ap-primary-border);
+    border: 1px solid var(--ap-primary);
+    color: var(--ap-primary-text);
+    border-radius: 20px;
+    padding: 0.2rem 0.75rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.approver-card-body { padding: 1.25rem 1.5rem; }
+
+/* ── Summary chips ───────────────────────────────────────────────────────── */
+.as-overall-summary {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+}
+.as-summary-chip {
+    border-radius: var(--ap-radius);
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: filter 0.15s;
+}
+.as-summary-chip:hover { filter: brightness(0.95); }
+.as-summary-chip .chip-count { font-size: 1.15rem; font-weight: 800; line-height: 1; }
+
+.chip-missed   { background: var(--ap-missed-light);   color: var(--ap-missed-text);   border: 1px solid var(--ap-missed); }
+.chip-leave    { background: var(--ap-leave-light);    color: var(--ap-leave-text);    border: 1px solid var(--ap-leave); }
+.chip-short    { background: var(--ap-short-light);    color: var(--ap-short-text);    border: 1px solid var(--ap-short); }
+.chip-two-late { background: var(--ap-two-late-light); color: var(--ap-two-late-text); border: 1px solid var(--ap-two-late); }
+
+/* ── Collapsible detail sections ────────────────────────────────────────── */
+.detail-section {
+    border-radius: var(--ap-radius);
+    margin-bottom: 0.85rem;
+    overflow: hidden;
+    border: 1px solid var(--ap-border);
+}
+.detail-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.65rem 1rem;
+    cursor: pointer;
+    user-select: none;
+    font-weight: 600;
+    font-size: 0.88rem;
+    transition: filter 0.15s;
+}
+.detail-section-header:hover           { filter: brightness(0.95); }
+.detail-section-header .toggle-icon   { transition: transform 0.2s; font-size: 0.75rem; }
+.detail-section-header.collapsed .toggle-icon { transform: rotate(-90deg); }
+
+.missed-section   .detail-section-header { background: var(--ap-missed-light);   color: var(--ap-missed-text); }
+.leave-section    .detail-section-header { background: var(--ap-leave-light);    color: var(--ap-leave-text); }
+.short-section    .detail-section-header { background: var(--ap-short-light);    color: var(--ap-short-text); }
+.two-late-section .detail-section-header { background: var(--ap-two-late-light); color: var(--ap-two-late-text); }
+
+.detail-section-body             { overflow-x: auto; background: var(--ap-white); }
+.detail-section-body.hidden      { display: none; }
+
+/* ── Data tables ─────────────────────────────────────────────────────────── */
+.as-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+.as-table th {
+    background: var(--ap-bg-alt);
+    color: var(--ap-text-secondary);
+    font-weight: 700;
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 2px solid var(--ap-border);
+    white-space: nowrap;
+}
+.as-table td {
+    padding: 0.45rem 0.75rem;
+    border-bottom: 1px solid var(--ap-border-light);
+    color: var(--ap-text);
+    vertical-align: middle;
+}
+.as-table tr:last-child td  { border-bottom: none; }
+.as-table tr:hover td       { background: var(--ap-bg); }
+.as-table a {
+    color: var(--ap-link);
+    text-decoration: none;
+    font-weight: 600;
+    font-family: monospace;
+    font-size: 0.8rem;
+}
+.as-table a:hover { text-decoration: underline; color: var(--ap-link-hover); }
+
+/* ── Spinner ─────────────────────────────────────────────────────────────── */
+.ap-spinner-ring,
+.as-spinner-ring {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--ap-border);
+    border-top-color: var(--ap-primary);
+    border-radius: 50%;
+    animation: ap-spin 0.75s linear infinite;
+    margin-bottom: 0.75rem;
+}
+@keyframes ap-spin { to { transform: rotate(360deg); } }
+
+/* ── Error / alert messages ──────────────────────────────────────────────── */
+.as-error-msg {
+    background: #fff5f5;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+    border-radius: var(--ap-radius);
+    padding: 0.85rem 1.1rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+/* ── No-records placeholder ──────────────────────────────────────────────── */
+.as-no-records {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--ap-text-muted);
+    font-size: 1rem;
+}
+.as-no-records .no-records-icon {
+    font-size: 2.5rem;
+    display: block;
+    margin-bottom: 0.75rem;
+}
+
+/* ── Page header banner (web pages) ─────────────────────────────────────── */
+.as-page-header {
+    background: linear-gradient(135deg, var(--ap-primary-light) 0%, #DBEAFE 100%);
+    color: var(--ap-primary-text);
+    border: 1px solid var(--ap-primary-border);
+    padding: 2rem 2.5rem;
+    border-radius: var(--ap-radius-lg);
+    margin-bottom: 1.75rem;
+}
+.as-page-header h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 0 0 0.3rem 0;
+    color: var(--ap-primary-text);
+}
+.as-page-header p {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--ap-text-secondary);
+}
+
+/* ── Filter bar (web pages) ──────────────────────────────────────────────── */
+.as-filter-bar {
+    background: var(--ap-white);
+    border: 1px solid var(--ap-border);
+    border-radius: var(--ap-radius-lg);
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: flex-end;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.75rem;
+    box-shadow: var(--ap-shadow-sm);
+}
+.as-filter-bar .filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+.as-filter-bar label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--ap-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.as-filter-bar input[type="date"] {
+    border: 1px solid #ced4da;
+    border-radius: var(--ap-radius);
+    padding: 0.45rem 0.7rem;
+    font-size: 0.9rem;
+    color: var(--ap-text);
+    min-width: 165px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.as-filter-bar input[type="date"]:focus {
+    outline: none;
+    border-color: var(--ap-primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+#generate-btn {
+    background: var(--ap-primary);
+    color: var(--ap-white);
+    border: none;
+    border-radius: var(--ap-radius);
+    padding: 0.5rem 1.4rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.18s, box-shadow 0.18s;
+    height: 36px;
+    align-self: flex-end;
+}
+#generate-btn:hover   { background: var(--ap-primary-dark); box-shadow: 0 2px 6px rgba(37,99,235,0.25); }
+#generate-btn:disabled { background: #93c5fd; cursor: not-allowed; box-shadow: none; }

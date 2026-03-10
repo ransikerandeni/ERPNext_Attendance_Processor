@@ -6,10 +6,24 @@ from html import escape as _esc
 # ---------------------------------------------------------------------------
 
 _SECTION_COLORS = {
-    "missed_attendance_request": "#C0392B",  # red
-    "leave_application":         "#E67E22",  # orange
-    "short_leave_application":   "#2980B9",  # blue
-    "two_late_to_half_day":      "#8E44AD",  # purple
+    "missed_attendance_request": "#DC2626",  # red
+    "leave_application":         "#EA580C",  # orange
+    "short_leave_application":   "#2563EB",  # blue
+    "two_late_to_half_day":      "#7C3AED",  # purple
+}
+
+_SECTION_LIGHT_COLORS = {
+    "missed_attendance_request": "#FEE2E2",
+    "leave_application":         "#FFEDD5",
+    "short_leave_application":   "#EFF6FF",
+    "two_late_to_half_day":      "#EDE9FE",
+}
+
+_SECTION_DARK_TEXTS = {
+    "missed_attendance_request": "#991B1B",
+    "leave_application":         "#9A3412",
+    "short_leave_application":   "#1E40AF",
+    "two_late_to_half_day":      "#5B21B6",
 }
 
 _SECTION_LABELS = {
@@ -19,7 +33,9 @@ _SECTION_LABELS = {
     "two_late_to_half_day":      "Two Late Attendance To One Half Day",
 }
 
-_HEADER_COLOR = "#2F5496"  # deep blue
+_HEADER_COLOR      = "#2563EB"  # primary blue
+_HEADER_LIGHT      = "#EFF6FF"  # light blue banner bg
+_HEADER_TEXT       = "#1E40AF"  # dark blue text on light bg
 
 
 # ---------------------------------------------------------------------------
@@ -36,7 +52,7 @@ def _fmt_time(val):
     return s or "\u2014"
 
 
-def _build_section_html(label, color, records):
+def _build_section_html(label, color, light_color, dark_text, records):
     """
     Build one HTML <table> block for a single issue category.
     Returns an empty string if records is empty.
@@ -77,13 +93,13 @@ def _build_section_html(label, color, records):
         f'</h3>'
         f'<table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;">'
         f'<thead>'
-        f'<tr style="background:{color};color:#fff;">'
-        f'<th style="padding:8px 10px;border:1px solid #bbb;text-align:left;">Date</th>'
-        f'<th style="padding:8px 10px;border:1px solid #bbb;text-align:left;">Status</th>'
-        f'<th style="padding:8px 10px;border:1px solid #bbb;text-align:left;">In Time</th>'
-        f'<th style="padding:8px 10px;border:1px solid #bbb;text-align:left;">Out Time</th>'
-        f'<th style="padding:8px 10px;border:1px solid #bbb;text-align:left;">Shift</th>'
-        f'<th style="padding:8px 10px;border:1px solid #bbb;text-align:left;">Remarks</th>'
+        f'<tr style="background:{light_color};color:{dark_text};">'
+        f'<th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Date</th>'
+        f'<th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Status</th>'
+        f'<th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">In Time</th>'
+        f'<th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Out Time</th>'
+        f'<th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Shift</th>'
+        f'<th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Remarks</th>'
         f'</tr>'
         f'</thead>'
         f'<tbody>'
@@ -119,6 +135,8 @@ def build_html_email(employee_name, issues, period_label):
         _build_section_html(
             _SECTION_LABELS[key],
             _SECTION_COLORS[key],
+            _SECTION_LIGHT_COLORS[key],
+            _SECTION_DARK_TEXTS[key],
             issues.get(key, []),
         )
         for key in (
@@ -142,8 +160,8 @@ def build_html_email(employee_name, issues, period_label):
     else:
         attention_block = ""
         no_issues_block = (
-            '<div style="padding:16px;background:#DFF0D8;border:1px solid #3C763D;'
-            'border-radius:4px;font-family:Arial,sans-serif;color:#3C763D;margin-bottom:16px;">'
+            '<div style="padding:16px;background:#DCFCE7;border:1px solid #16A34A;'
+            'border-radius:4px;font-family:Arial,sans-serif;color:#166534;margin-bottom:16px;">'
             '&#10003;&nbsp; No outstanding attendance items were found for this period. '
             'Thank you for keeping your attendance up to date.'
             '</div>'
@@ -170,8 +188,8 @@ def build_html_email(employee_name, issues, period_label):
 
           <!-- Header Banner -->
           <tr>
-            <td style="background:{_HEADER_COLOR};padding:24px 32px;">
-              <h1 style="margin:0;color:#ffffff;font-family:Arial,sans-serif;
+            <td style="background:{_HEADER_LIGHT};border-bottom:2px solid {_HEADER_COLOR};padding:24px 32px;">
+              <h1 style="margin:0;color:{_HEADER_TEXT};font-family:Arial,sans-serif;
                          font-size:20px;font-weight:bold;letter-spacing:.4px;">
                 Attendance Summary &mdash; {safe_period}
               </h1>

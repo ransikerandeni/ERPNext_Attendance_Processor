@@ -37,7 +37,7 @@ class ApproverSummaryPage {
 				display: inline-block;
 				width: 40px; height: 40px;
 				border: 4px solid #DEE2E6;
-				border-top-color: #2F5496;
+				border-top-color: #2563EB;
 				border-radius: 50%;
 				animation: as-spin 0.75s linear infinite;
 				margin-bottom: 0.75rem;
@@ -63,10 +63,15 @@ class ApproverSummaryPage {
 				margin-bottom: 1.5rem;
 				overflow: hidden;
 				box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+				transition: box-shadow 0.2s;
+			}
+			.approver-card:hover {
+				box-shadow: 0 3px 10px rgba(37, 99, 235, 0.10);
 			}
 			.approver-card-header {
-				background: #2F5496;
-				color: #fff;
+				background: #EFF6FF;
+				color: #1E40AF;
+				border-bottom: 1px solid #BFDBFE;
 				padding: 0.9rem 1.5rem;
 				display: flex;
 				justify-content: space-between;
@@ -76,12 +81,12 @@ class ApproverSummaryPage {
 				margin: 0;
 				font-size: 1.05rem;
 				font-weight: 700;
-				color: #fff;
+				color: #1E40AF;
 			}
 			.pending-badge {
-				background: rgba(255,255,255,0.25);
-				border: 1px solid rgba(255,255,255,0.45);
-				color: #fff;
+				background: #BFDBFE;
+				border: 1px solid #2563EB;
+				color: #1E40AF;
 				border-radius: 20px;
 				padding: 0.2rem 0.75rem;
 				font-size: 0.82rem;
@@ -102,16 +107,17 @@ class ApproverSummaryPage {
 				padding: 0.5rem 1rem;
 				font-size: 0.85rem;
 				font-weight: 600;
-				color: #fff;
 				display: flex;
 				align-items: center;
 				gap: 0.5rem;
+				transition: filter 0.15s;
 			}
+			.as-summary-chip:hover { filter: brightness(0.95); }
 			.as-summary-chip .chip-count { font-size: 1.15rem; font-weight: 800; line-height: 1; }
-			.chip-missed   { background: #C0392B; }
-			.chip-leave    { background: #E67E22; }
-			.chip-short    { background: #2980B9; }
-			.chip-two-late { background: #8E44AD; }
+			.chip-missed   { background: #FEE2E2; color: #991B1B; border: 1px solid #DC2626; }
+			.chip-leave    { background: #FFEDD5; color: #9A3412; border: 1px solid #EA580C; }
+			.chip-short    { background: #EFF6FF; color: #1E40AF; border: 1px solid #2563EB; }
+			.chip-two-late { background: #EDE9FE; color: #5B21B6; border: 1px solid #7C3AED; }
 
 			/* ── Detail Sections ─────────────────────────────────────────── */
 			.detail-section {
@@ -127,16 +133,17 @@ class ApproverSummaryPage {
 				padding: 0.65rem 1rem;
 				cursor: pointer;
 				user-select: none;
-				color: #fff;
 				font-weight: 600;
 				font-size: 0.88rem;
+				transition: filter 0.15s;
 			}
+			.detail-section-header:hover { filter: brightness(0.95); }
 			.detail-section-header .toggle-icon { transition: transform 0.2s; font-size: 0.75rem; }
 			.detail-section-header.collapsed .toggle-icon { transform: rotate(-90deg); }
-			.missed-section   .detail-section-header { background: #C0392B; }
-			.leave-section    .detail-section-header { background: #E67E22; }
-			.short-section    .detail-section-header { background: #2980B9; }
-			.two-late-section .detail-section-header { background: #8E44AD; }
+			.missed-section   .detail-section-header { background: #FEE2E2; color: #991B1B; }
+			.leave-section    .detail-section-header { background: #FFEDD5; color: #9A3412; }
+			.short-section    .detail-section-header { background: #EFF6FF; color: #1E40AF; }
+			.two-late-section .detail-section-header { background: #EDE9FE; color: #5B21B6; }
 			.detail-section-body { overflow-x: auto; background: #fff; }
 			.detail-section-body.hidden { display: none; }
 
@@ -160,7 +167,7 @@ class ApproverSummaryPage {
 			.as-table tr:last-child td { border-bottom: none; }
 			.as-table tr:hover td { background: #f8f9fa; }
 			.as-table a {
-				color: #2F5496;
+				color: #2563EB;
 				text-decoration: none;
 				font-weight: 600;
 				font-family: monospace;
