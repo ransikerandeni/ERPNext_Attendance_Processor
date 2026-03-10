@@ -124,13 +124,13 @@ class AttendanceSummaryReport {
 			$wrap.append(`
 				<span class="ap-emp-pill"
 				      style="display:inline-flex;align-items:center;gap:3px;
-				             background:#E8F0FE;color:#1558D6;
-				             border:1px solid #C5D8F6;border-radius:20px;
+				             background:#EFF6FF;color:#2563EB;
+				             border:1px solid #BFDBFE;border-radius:20px;
 				             padding:2px 10px 2px 10px;font-size:12px;font-weight:500;">
 					${frappe.utils.escape_html(emp)}
 					<span class="ap-pill-remove" data-emp="${frappe.utils.escape_html(emp)}"
 					      style="cursor:pointer;font-size:15px;line-height:1;
-					             color:#888;margin-left:3px;" title="${__('Remove')}">
+					             color:#6c757d;margin-left:3px;" title="${__('Remove')}">
 						&times;
 					</span>
 				</span>
@@ -328,12 +328,12 @@ class AttendanceSummaryReport {
 		});
 
 		const CARDS = [
-			{ key: null,                           icon: "👥",  label: "Employees Analysed",        val: total,                                color: "#2F5496" },
-			{ key: null,                           icon: "⚠️",  label: "Employees with Issues",     val: with_issues,                          color: "#C0392B" },
-			{ key: "missed_attendance_request",    icon: "🕐",  label: "Missed Attendance",         val: counts.missed_attendance_request,     color: "#C0392B" },
-			{ key: "leave_application",            icon: "📋",  label: "Leave Applications",        val: counts.leave_application,             color: "#E67E22" },
-			{ key: "short_leave_application",      icon: "🌤",  label: "Short Leave",               val: counts.short_leave_application,       color: "#2980B9" },
-			{ key: "two_late_to_half_day",         icon: "⏰",  label: "Two Late → Half Day",       val: counts.two_late_to_half_day,          color: "#8E44AD" },
+			{ key: null,                           icon: "👥",  label: "Employees Analysed",        val: total,                                color: "#2563EB" },
+			{ key: null,                           icon: "⚠️",  label: "Employees with Issues",     val: with_issues,                          color: "#DC2626" },
+			{ key: "missed_attendance_request",    icon: "🕐",  label: "Missed Attendance",         val: counts.missed_attendance_request,     color: "#DC2626" },
+			{ key: "leave_application",            icon: "📋",  label: "Leave Applications",        val: counts.leave_application,             color: "#EA580C" },
+			{ key: "short_leave_application",      icon: "🌤",  label: "Short Leave",               val: counts.short_leave_application,       color: "#2563EB" },
+			{ key: "two_late_to_half_day",         icon: "⏰",  label: "Two Late → Half Day",       val: counts.two_late_to_half_day,          color: "#7C3AED" },
 		];
 
 		var cards_html = CARDS.map(c => `
@@ -481,10 +481,22 @@ class AttendanceSummaryReport {
 
 	_build_emp_card(emp) {
 		const COLORS = {
-			missed_attendance_request: "#C0392B",
-			leave_application:         "#E67E22",
-			short_leave_application:   "#2980B9",
-			two_late_to_half_day:      "#8E44AD",
+			missed_attendance_request: "#DC2626",
+			leave_application:         "#EA580C",
+			short_leave_application:   "#2563EB",
+			two_late_to_half_day:      "#7C3AED",
+		};
+		const LIGHT_COLORS = {
+			missed_attendance_request: "#FEE2E2",
+			leave_application:         "#FFEDD5",
+			short_leave_application:   "#EFF6FF",
+			two_late_to_half_day:      "#EDE9FE",
+		};
+		const DARK_TEXTS = {
+			missed_attendance_request: "#991B1B",
+			leave_application:         "#9A3412",
+			short_leave_application:   "#1E40AF",
+			two_late_to_half_day:      "#5B21B6",
 		};
 		const LABELS = {
 			missed_attendance_request: __("Missed Attendance"),
@@ -494,7 +506,7 @@ class AttendanceSummaryReport {
 		};
 
 		var has_issues = emp.total_issues > 0;
-		var header_bg  = has_issues ? "#fafafa" : "#f0faf5";
+		var header_bg  = has_issues ? "#fafafa" : "#F0FDF4";
 
 		// Issue count badges in the collapsed header row
 		var badges_html = "";
@@ -504,17 +516,18 @@ class AttendanceSummaryReport {
 				if (!n) return;
 				badges_html += `
 					<span style="display:inline-block; padding:2px 9px;
-					             border-radius:10px; background:${COLORS[k]};
-					             color:#fff; font-size:11px; margin-left:6px;
-					             white-space:nowrap;">
+					             border-radius:10px; background:${LIGHT_COLORS[k]};
+					             color:${DARK_TEXTS[k]}; font-size:11px; margin-left:6px;
+					             border:1px solid ${COLORS[k]}; white-space:nowrap;">
 						${n} ${LABELS[k]}
 					</span>`;
 			});
 		} else {
 			badges_html = `
 				<span style="display:inline-block; padding:2px 9px;
-				             border-radius:10px; background:#27AE60;
-				             color:#fff; font-size:11px; margin-left:6px;">
+				             border-radius:10px; background:#DCFCE7;
+				             color:#166534; font-size:11px; margin-left:6px;
+				             border:1px solid #16A34A;">
 					&#10003; ${__("No Issues")}
 				</span>`;
 		}
@@ -525,12 +538,13 @@ class AttendanceSummaryReport {
 			Object.keys(COLORS).forEach(k => {
 				var recs = emp.issues[k] || [];
 				if (recs.length) {
-					tables_html += this._build_issue_table(recs, LABELS[k], COLORS[k]);
+				tables_html += this._build_issue_table(recs, LABELS[k], COLORS[k], LIGHT_COLORS[k], DARK_TEXTS[k]);
 				}
 			});
 		} else {
 			tables_html = `
-				<p style="color:#27AE60; padding:16px 20px 14px; margin:0; font-size:13px;">
+				<p style="color:#166534; padding:16px 20px 14px; margin:0; font-size:13px;
+				          background:#F0FDF4; border-left:3px solid #16A34A;">
 					&#10003; ${__("No uncovered attendance issues found for this period.")}
 				</p>`;
 		}
@@ -540,7 +554,7 @@ class AttendanceSummaryReport {
 
 		return `
 			<div class="ap-emp-card"
-			     style="border:1px solid #e0e0e0; border-radius:6px;
+			     style="border:1px solid #DEE2E6; border-radius:6px;
 			            margin-bottom:8px; overflow:hidden;">
 
 				<!-- Clickable header row -->
@@ -577,7 +591,7 @@ class AttendanceSummaryReport {
 					            border-top:1px solid #f0f0f0; background:#fafafa;">
 						<a href="/app/employee/${e_id}"
 						   target="_blank"
-						   style="font-size:12px; color:#2980B9; text-decoration:none;">
+					   style="font-size:12px; color:#2563EB; text-decoration:none; font-weight:500;">
 							${__("View Employee Record")} &#8599;
 						</a>
 					</div>
@@ -588,7 +602,7 @@ class AttendanceSummaryReport {
 
 	// ── Single issue-category table ────────────────────────────────────────
 
-	_build_issue_table(records, heading, color) {
+	_build_issue_table(records, heading, color, lightBg, darkText) {
 		var rows_html = records.map((rec, i) => {
 			var bg = i % 2 === 0 ? "#f9f9f9" : "#fff";
 			var es = s => frappe.utils.escape_html(String(s || "\u2014"));
@@ -632,7 +646,7 @@ class AttendanceSummaryReport {
 						${link
 							? `<a href="/app/attendance/${link}"
 							      target="_blank"
-							      style="font-size:11px; color:#2980B9;">
+						      style="font-size:11px; color:#2563EB; font-weight:600;">
 								   ${__("Open")} &#8599;
 								</a>`
 							: ""}
@@ -655,14 +669,14 @@ class AttendanceSummaryReport {
 					<table style="width:100%; border-collapse:collapse;
 					              font-size:12px; min-width:560px;">
 						<thead>
-							<tr style="background:${color}; color:#fff;">
-								<th style="padding:7px 10px; text-align:left; border:1px solid rgba(255,255,255,.25);">${__("Date")}</th>
-								<th style="padding:7px 10px; text-align:left; border:1px solid rgba(255,255,255,.25);">${__("Status")}</th>
-								<th style="padding:7px 10px; text-align:left; border:1px solid rgba(255,255,255,.25);">${__("In Time")}</th>
-								<th style="padding:7px 10px; text-align:left; border:1px solid rgba(255,255,255,.25);">${__("Out Time")}</th>
-								<th style="padding:7px 10px; text-align:left; border:1px solid rgba(255,255,255,.25);">${__("Shift")}</th>
-								<th style="padding:7px 10px; text-align:left; border:1px solid rgba(255,255,255,.25);">${__("Remarks")}</th>
-								<th style="padding:7px 10px; text-align:center; border:1px solid rgba(255,255,255,.25);">${__("Action")}</th>
+						<tr style="background:${lightBg}; color:${darkText};">
+							<th style="padding:7px 10px; text-align:left; border:1px solid rgba(0,0,0,.08);">${__("Date")}</th>
+							<th style="padding:7px 10px; text-align:left; border:1px solid rgba(0,0,0,.08);">${__("Status")}</th>
+							<th style="padding:7px 10px; text-align:left; border:1px solid rgba(0,0,0,.08);">${__("In Time")}</th>
+							<th style="padding:7px 10px; text-align:left; border:1px solid rgba(0,0,0,.08);">${__("Out Time")}</th>
+							<th style="padding:7px 10px; text-align:left; border:1px solid rgba(0,0,0,.08);">${__("Shift")}</th>
+							<th style="padding:7px 10px; text-align:left; border:1px solid rgba(0,0,0,.08);">${__("Remarks")}</th>
+							<th style="padding:7px 10px; text-align:center; border:1px solid rgba(0,0,0,.08);">${__("Action")}</th>
 							</tr>
 						</thead>
 						<tbody>${rows_html}</tbody>
@@ -747,11 +761,11 @@ class AttendanceSummaryReport {
 				<td style="padding:7px 10px;border:1px solid #eee;font-size:12px;font-weight:500;">
 					${frappe.utils.escape_html(r.employee_name)}
 				</td>
-				<td style="padding:7px 10px;border:1px solid #eee;font-size:12px;color:#2980B9;">
+				<td style="padding:7px 10px;border:1px solid #eee;font-size:12px;color:#2563EB;">
 					${frappe.utils.escape_html(r.email || "\u2014")}
 				</td>
 				<td style="padding:7px 10px;border:1px solid #eee;font-size:12px;
-				           text-align:center;font-weight:600;color:#C0392B;">
+				           text-align:center;font-weight:600;color:#DC2626;">
 					${r.issue_count}
 				</td>
 			</tr>
@@ -780,20 +794,20 @@ class AttendanceSummaryReport {
 			            border:1px solid #ddd;border-radius:4px;">
 				<table style="width:100%;border-collapse:collapse;">
 					<thead>
-						<tr style="background:#2F5496;color:#fff;">
+						<tr style="background:#EFF6FF;color:#1E40AF;">
 							<th style="padding:8px 10px;text-align:center;font-size:12px;width:36px;
-							           border:1px solid rgba(255,255,255,.2);">
+							           border:1px solid rgba(0,0,0,.08);">
 								<input type="checkbox" id="ap-chk-header" checked
 								       style="cursor:pointer;width:14px;height:14px;" title="${__("Toggle all")}">
 							</th>
 							<th style="padding:8px 10px;text-align:left;font-size:12px;
-							           border:1px solid rgba(255,255,255,.2);">${__("Employee ID")}</th>
+							           border:1px solid rgba(0,0,0,.08);">${__("Employee ID")}</th>
 							<th style="padding:8px 10px;text-align:left;font-size:12px;
-							           border:1px solid rgba(255,255,255,.2);">${__("Name")}</th>
+							           border:1px solid rgba(0,0,0,.08);">${__("Name")}</th>
 							<th style="padding:8px 10px;text-align:left;font-size:12px;
-							           border:1px solid rgba(255,255,255,.2);">${__("Email")}</th>
+							           border:1px solid rgba(0,0,0,.08);">${__("Email")}</th>
 							<th style="padding:8px 10px;text-align:center;font-size:12px;
-							           border:1px solid rgba(255,255,255,.2);">${__("Issues")}</th>
+							           border:1px solid rgba(0,0,0,.08);">${__("Issues")}</th>
 						</tr>
 					</thead>
 					<tbody>${rows_html}</tbody>
