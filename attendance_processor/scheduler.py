@@ -1,5 +1,5 @@
 import frappe
-from frappe.utils import getdate, nowdate, add_days, get_first_day
+from frappe.utils import getdate, nowdate, add_days, get_first_day, now_datetime, get_time
 
 from attendance_processor.utils.processor import (
     get_attendance_records,
@@ -150,3 +150,56 @@ def send_monthly_attendance_summary():
 
     period_label = last_prev.strftime("%B %Y") + " (Monthly)"
     _run_for_period(first_prev, last_prev, period_label)
+
+
+# ---------------------------------------------------------------------------
+# Hourly dispatcher — reads Attendance Processor Settings
+# ---------------------------------------------------------------------------
+
+def run_scheduled_reports():
+    """
+    Runs every hour (via scheduler_events in hooks.py).
+    Reads Attendance Processor Settings and triggers the weekly and/or monthly
+    report jobs when the configured day and hour are reached, ensuring each
+    job fires at most once per day.
+    """
+    try:
+        settings = frappe.get_single("Attendance Processor Settings")
+    except Exception:
+        # Settings DocType not yet installed; skip silently
+        return
+
+    now   = now_datetime()
+    today = getdate(nowdate())
+
+    # ── Weekly ────────────────────────────────────────────────────────────
+    if settings.enable_weekly_report:
+        send_day  = settings.weekly_send_day or "Monday"
+        send_hour = get_time(settings.weekly_send_time).hour if settings.weekly_send_time else 8
+
+        if now.strftime("%A") == send_day and now.hour == send_hour:
+            last_sent = getdate(settings.weekly_last_sent) if settings.weekly_last_sent else None
+            if last_sent != today:
+                send_weekly_attendance_summary()
+                frappe.db.set_value(
+                    "Attendance Processor Settings", None,
+                    "weekly_last_sent", today,
+                    update_modified=False,
+                )
+                frappe.db.commit()
+
+    # ── Monthly ───────────────────────────────────────────────────────────
+    if settings.enable_monthly_report:
+        send_day_of_month = int(settings.monthly_send_day or 1)
+        send_hour         = get_time(settings.monthly_send_time).hour if settings.monthly_send_time else 8
+
+        if today.day == send_day_of_month and now.hour == send_hour:
+            last_sent = getdate(settings.monthly_last_sent) if settings.monthly_last_sent else None
+            if last_sent != today:
+                send_monthly_attendance_summary()
+                frappe.db.set_value(
+                    "Attendance Processor Settings", None,
+                    "monthly_last_sent", today,
+                    update_modified=False,
+                )
+                frappe.db.commit()
