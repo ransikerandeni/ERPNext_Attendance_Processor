@@ -1,0 +1,170 @@
+{
+ "actions": [],
+ "creation": "2026-03-10 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "weekly_section",
+  "enable_weekly_report",
+  "col_break_1",
+  "weekly_send_day",
+  "weekly_send_time",
+  "col_break_2",
+  "weekly_last_sent",
+  "monthly_section",
+  "enable_monthly_report",
+  "col_break_3",
+  "monthly_send_day",
+  "monthly_send_time",
+  "col_break_4",
+  "monthly_last_sent",
+  "email_template_section",
+  "email_intro_text",
+  "email_no_issues_text",
+  "email_signature",
+  "email_footer_note"
+ ],
+ "fields": [
+  {
+   "fieldname": "weekly_section",
+   "fieldtype": "Section Break",
+   "label": "Weekly Attendance Report"
+  },
+  {
+   "default": "1",
+   "description": "When enabled, the weekly attendance summary email is sent automatically on the configured day and time.",
+   "fieldname": "enable_weekly_report",
+   "fieldtype": "Check",
+   "label": "Enable Weekly Report"
+  },
+  {
+   "fieldname": "col_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Monday",
+   "depends_on": "eval:doc.enable_weekly_report",
+   "description": "Day of the week on which the weekly report email will be sent.",
+   "fieldname": "weekly_send_day",
+   "fieldtype": "Select",
+   "label": "Send On (Day of Week)",
+   "options": "Monday\nTuesday\nWednesday\nThursday\nFriday\nSaturday\nSunday"
+  },
+  {
+   "default": "08:00:00",
+   "depends_on": "eval:doc.enable_weekly_report",
+   "description": "Time of day at which the weekly report will be triggered (matched to the hour by the hourly scheduler).",
+   "fieldname": "weekly_send_time",
+   "fieldtype": "Time",
+   "label": "Send Time"
+  },
+  {
+   "fieldname": "col_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "weekly_last_sent",
+   "fieldtype": "Date",
+   "label": "Last Weekly Report Sent On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "monthly_section",
+   "fieldtype": "Section Break",
+   "label": "Monthly Attendance Report"
+  },
+  {
+   "default": "1",
+   "description": "When enabled, the monthly attendance summary email is sent automatically on the configured day and time.",
+   "fieldname": "enable_monthly_report",
+   "fieldtype": "Check",
+   "label": "Enable Monthly Report"
+  },
+  {
+   "fieldname": "col_break_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_monthly_report",
+   "description": "Day of the month (1–28) on which the monthly report email will be sent. Values above 28 may not exist in every month.",
+   "fieldname": "monthly_send_day",
+   "fieldtype": "Int",
+   "label": "Send on Day of Month (1–28)"
+  },
+  {
+   "default": "08:00:00",
+   "depends_on": "eval:doc.enable_monthly_report",
+   "description": "Time of day at which the monthly report will be triggered (matched to the hour by the hourly scheduler).",
+   "fieldname": "monthly_send_time",
+   "fieldtype": "Time",
+   "label": "Send Time"
+  },
+  {
+   "fieldname": "col_break_4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "monthly_last_sent",
+   "fieldtype": "Date",
+   "label": "Last Monthly Report Sent On",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "email_template_section",
+   "fieldtype": "Section Break",
+   "label": "Email Template"
+  },
+  {
+   "description": "Shown above the issue tables when the employee has pending items. Use {count} as a placeholder for the number of issues. Leave blank to use the built-in default.",
+   "fieldname": "email_intro_text",
+   "fieldtype": "Long Text",
+   "label": "Intro Text (Issues Found)"
+  },
+  {
+   "description": "Shown in the green banner when the employee has no pending attendance items. Leave blank to use the built-in default.",
+   "fieldname": "email_no_issues_text",
+   "fieldtype": "Long Text",
+   "label": "No Issues Text"
+  },
+  {
+   "description": "Signature and closing text shown after the attendance tables. Use a blank line (press Enter twice) to separate paragraphs. Leave blank to use the built-in default.",
+   "fieldname": "email_signature",
+   "fieldtype": "Long Text",
+   "label": "Email Signature"
+  },
+  {
+   "description": "Small disclaimer text shown in the email footer. Leave blank to use the built-in default.",
+   "fieldname": "email_footer_note",
+   "fieldtype": "Long Text",
+   "label": "Footer Disclaimer"
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-03-11 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Attendance Processor",
+ "name": "Attendance Processor Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 0,
+   "print": 1,
+   "read": 1,
+   "report": 0,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

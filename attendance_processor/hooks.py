@@ -27,7 +27,9 @@ web_include_css = "/assets/attendance_processor/css/attendance_processor.css"
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
+doctype_js = {
+	"Attendance Processor Settings": "attendance_processor/doctype/attendance_processor_settings/attendance_processor_settings.js"
+}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
@@ -126,6 +128,14 @@ web_include_css = "/assets/attendance_processor/css/attendance_processor.css"
 
 # Scheduled Tasks
 # ---------------
+
+scheduler_events = {
+	# Runs every hour; reads Attendance Processor Settings to decide whether
+	# to fire the weekly and/or monthly report jobs.
+	"hourly": [
+		"attendance_processor.scheduler.run_scheduled_reports",
+	],
+}
 
 # scheduler_events = {
 # 	"all": [

@@ -301,3 +301,164 @@ def _do_send_emails(from_date, to_date, employee=None,
             )
 
     frappe.db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Manual trigger API — called from the Settings form "Send Now" buttons
+# ---------------------------------------------------------------------------
+
+@frappe.whitelist()
+def send_test_email_to_employee(employee, period_type="weekly",
+                                from_date=None, to_date=None):
+    """
+    Send a test attendance summary email to a single employee immediately.
+    Always sends even if the employee has no issues (for testing purposes).
+    Restricted to System Manager.
+
+    Args:
+        employee:    str  — Employee document name
+        period_type: str  — "weekly", "monthly", or "custom"
+        from_date:   str  — required when period_type == "custom" ("YYYY-MM-DD")
+        to_date:     str  — required when period_type == "custom" ("YYYY-MM-DD")
+
+    Returns:
+        {"status": "sent"|"error", "message": str}
+    """
+    if "System Manager" not in frappe.get_roles():
+        frappe.throw(frappe._("Not permitted"), frappe.PermissionError)
+
+    from frappe.utils import getdate, nowdate, add_days, get_first_day
+
+    if period_type == "now":
+        today        = getdate(nowdate())
+        fd           = today
+        td           = today
+        period_label = f"{today} (Today)"
+    elif period_type == "weekly":
+        today          = getdate(nowdate())
+        days_since_mon = today.weekday()
+        fd             = add_days(today, -(days_since_mon + 7))
+        td             = add_days(fd, 6)
+        period_label   = f"{fd} to {td} (Weekly)"
+    elif period_type == "monthly":
+        today      = getdate(nowdate())
+        first_this = get_first_day(today)
+        last_prev  = add_days(first_this, -1)
+        first_prev = get_first_day(last_prev)
+        fd           = first_prev
+        td           = last_prev
+        period_label = last_prev.strftime("%B %Y") + " (Monthly)"
+    else:
+        if not from_date or not to_date:
+            frappe.throw(frappe._("from_date and to_date are required for custom period."))
+        fd           = getdate(from_date)
+        td           = getdate(to_date)
+        period_label = f"{fd} to {td} (Custom)"
+
+    emp = frappe.db.get_value("Employee", employee, ["name", "employee_name"], as_dict=True)
+    if not emp:
+        frappe.throw(frappe._("Employee {0} not found.").format(employee))
+
+    missed_lookup      = get_missed_requests_lookup(fd, td)
+    leave_lookup       = get_leave_applications_lookup(fd, td)
+    short_leave_lookup = get_short_leave_lookup(fd, td)
+    two_late_lookup    = get_two_late_lookup(fd, td)
+    all_records        = get_attendance_records(fd, td, employees=[employee])
+
+    if not all_records:
+        # No attendance records but still send to confirm email delivery
+        emp_records = []
+    else:
+        emp_records = [r for r in all_records if r.employee == employee]
+
+    issues = analyse_employee(
+        employee, emp_records,
+        missed_lookup, leave_lookup,
+        short_leave_lookup, two_late_lookup,
+    )
+
+    recipient = frappe.db.get_value("Employee", employee, "user_id")
+    if not recipient:
+        frappe.throw(
+            frappe._("Employee {0} has no linked User account. Cannot send email.").format(employee)
+        )
+
+    from attendance_processor.utils.email_report import build_html_email
+    employee_name = emp.employee_name or employee
+    total_issues  = sum(len(v) for v in issues.values())
+
+    if total_issues > 0:
+        subject = f"[TEST] [Action Required] Attendance Summary — {period_label}"
+    else:
+        subject = f"[TEST] Attendance Summary — {period_label} (No Issues)"
+
+    html_body = build_html_email(employee_name, issues, period_label)
+
+    try:
+        frappe.sendmail(
+            recipients=[recipient],
+            subject=subject,
+            message=html_body,
+            now=True,
+        )
+    except Exception as exc:
+        frappe.log_error(
+            f"Test email failed for {employee} ({employee_name}): {exc}",
+            title="Attendance Summary: Test Email Failed",
+        )
+        return {"status": "error", "message": str(exc)}
+
+    return {
+        "status":  "sent",
+        "message": f"Test email sent to {recipient} ({employee_name}) "
+                   f"for period {period_label}.",
+    }
+
+
+@frappe.whitelist()
+def trigger_weekly_report():
+    """
+    Enqueue the weekly attendance summary job immediately (on-demand).
+    Restricted to System Manager.  Does not affect the last_sent tracking,
+    so the scheduled run will still fire on the configured day.
+
+    Returns:
+        {"status": "queued", "message": str}
+    """
+    if "System Manager" not in frappe.get_roles():
+        frappe.throw(frappe._("Not permitted"), frappe.PermissionError)
+
+    frappe.enqueue(
+        "attendance_processor.scheduler.send_weekly_attendance_summary",
+        queue="long",
+        timeout=3600,
+    )
+    return {
+        "status":  "queued",
+        "message": "Weekly attendance summary job has been queued. "
+                   "Emails will be delivered in the background.",
+    }
+
+
+@frappe.whitelist()
+def trigger_monthly_report():
+    """
+    Enqueue the monthly attendance summary job immediately (on-demand).
+    Restricted to System Manager.
+
+    Returns:
+        {"status": "queued", "message": str}
+    """
+    if "System Manager" not in frappe.get_roles():
+        frappe.throw(frappe._("Not permitted"), frappe.PermissionError)
+
+    frappe.enqueue(
+        "attendance_processor.scheduler.send_monthly_attendance_summary",
+        queue="long",
+        timeout=3600,
+    )
+    return {
+        "status":  "queued",
+        "message": "Monthly attendance summary job has been queued. "
+                   "Emails will be delivered in the background.",
+    }
