@@ -50,6 +50,7 @@ class AttendanceSummaryReport {
 				"Custom",
 			].join("\n"),
 			change() {
+				if (me._setting_dates) return;
 				var v = me.f_preset.get_value();
 				if (v && v !== "Custom") me._apply_preset(v);
 			},
@@ -159,6 +160,7 @@ class AttendanceSummaryReport {
 	}
 
 	_apply_preset(preset) {
+		var me   = this;
 		var from, to;
 		switch (preset) {
 			case "Last Week":
@@ -180,11 +182,24 @@ class AttendanceSummaryReport {
 			default:
 				return;
 		}
-		this._setting_dates = true;
-		this.f_from.set_value(from);
-		this.f_to.set_value(to);
-		this.f_preset.set_value(preset);
-		this._setting_dates = false;
+
+		// Frappe's set_value fires df.change asynchronously (via frappe.run_serially /
+		// Promise chain). Setting _setting_dates = false at the end of this function
+		// (synchronously) would therefore have no effect — the change callbacks would
+		// always see _setting_dates = false and wrongly reset the preset to "Custom".
+		//
+		// Fix: keep _setting_dates = true by chaining the two set_value Promises, and
+		// only clear the flag once both async callbacks have finished.
+		// The preset Select is updated directly on the DOM to avoid firing its own
+		// change event (which would re-enter _apply_preset and cause an infinite loop).
+		me._setting_dates = true;
+		me.f_from.set_value(from)
+			.then(() => me.f_to.set_value(to))
+			.then(() => {
+				// Update the Select display without triggering its change callback.
+				me.f_preset.$input && me.f_preset.$input.val(preset);
+				me._setting_dates = false;
+			});
 	}
 
 	// ─── Page action buttons ────────────────────────────────────────────────
