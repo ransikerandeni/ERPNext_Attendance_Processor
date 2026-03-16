@@ -211,6 +211,14 @@ class AttendanceSummaryReport {
 			me._load_data();
 		}, "search");
 
+		this.page.add_button(__("Export Excel"), function () {
+			me._export("excel");
+		}, { btn_class: "btn-default" });
+
+		this.page.add_button(__("Export PDF"), function () {
+			me._export("pdf");
+		}, { btn_class: "btn-default" });
+
 		if (frappe.user_roles.includes("System Manager")) {
 			this.page.add_button(__("Send Emails"), function () {
 				me._confirm_send();
@@ -716,6 +724,81 @@ class AttendanceSummaryReport {
 				$toggle.text("▾");
 			}
 		});
+	}
+
+	// ─── Export helpers ────────────────────────────────────────────────────
+
+	_export(format) {
+		var me   = this;
+		var from = this.f_from.get_value();
+		var to   = this.f_to.get_value();
+
+		if (!from || !to) {
+			frappe.msgprint({
+				title:     __("Missing Dates"),
+				message:   __("Please select a date range and click Preview Report before exporting."),
+				indicator: "orange",
+			});
+			return;
+		}
+
+		if (!this.data || !this.data.length) {
+			frappe.msgprint({
+				title:     __("No Data"),
+				message:   __("Please click Preview Report to load attendance data before exporting."),
+				indicator: "orange",
+			});
+			return;
+		}
+
+		var method = format === "excel"
+			? "attendance_processor.utils.api.export_attendance_summary_excel"
+			: "attendance_processor.utils.api.export_attendance_summary_pdf";
+
+		var freeze_msg = format === "excel"
+			? __("Generating Excel file\u2026")
+			: __("Generating PDF\u2026");
+
+		frappe.call({
+			method: method,
+			args: {
+				from_date: from,
+				to_date:   to,
+				employees: JSON.stringify(this.selected_employees),
+			},
+			freeze:         true,
+			freeze_message: freeze_msg,
+			callback(r) {
+				if (r && r.message) {
+					me._trigger_download(r.message);
+				}
+			},
+		});
+	}
+
+	_trigger_download(result) {
+		try {
+			var byteArray = Uint8Array.from(
+				atob(result.content),
+				function (c) { return c.charCodeAt(0); }
+			);
+			var blob = new Blob([byteArray], { type: result.content_type });
+			var url  = URL.createObjectURL(blob);
+			var a    = document.createElement("a");
+			a.href     = url;
+			a.download = result.filename;
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+		} catch (err) {
+			console.error("Attendance export download error:", err);
+			frappe.msgprint({
+				title:     __("Download Failed"),
+				message:   __("The file could not be downloaded. Please try again."),
+				indicator: "red",
+			});
+		}
 	}
 
 	// ─── Send-emails flow ───────────────────────────────────────────────────

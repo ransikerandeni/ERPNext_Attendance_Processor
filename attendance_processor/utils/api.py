@@ -68,23 +68,14 @@ def _build_emp_data(all_records):
 
 
 # ---------------------------------------------------------------------------
-# Public whitelisted API
+# Internal analysis helper (shared by the API endpoints below)
 # ---------------------------------------------------------------------------
 
-@frappe.whitelist()
-def get_attendance_analysis(from_date, to_date, employees=None):
+def _run_analysis(from_date, to_date, employees=None):
     """
-    Run the 4-check attendance analysis for the given period and return
-    JSON-serialisable results.  Called by the Attendance Summary Report page.
-
-    Args:
-        from_date: str  "YYYY-MM-DD"
-        to_date:   str  "YYYY-MM-DD"
-        employees: str  JSON list of employee IDs to restrict analysis to;
-                        pass an empty list or omit to analyse all.
-
-    Returns:
-        List of dicts, one per active employee, sorted by issue count desc.
+    Core attendance analysis.  Returns (results, from_date, to_date) where
+    *results* is the same list-of-dicts used by all public endpoints and
+    *from_date* / *to_date* are normalised date objects.
     """
     import json
     from_date = getdate(from_date)
@@ -135,7 +126,413 @@ def get_attendance_analysis(from_date, to_date, employees=None):
 
     # employees with issues first, then alphabetically
     results.sort(key=lambda x: (-x["total_issues"], (x["employee_name"] or "").lower()))
+    return results, from_date, to_date
+
+
+# ---------------------------------------------------------------------------
+# Public whitelisted API
+# ---------------------------------------------------------------------------
+
+@frappe.whitelist()
+def get_attendance_analysis(from_date, to_date, employees=None):
+    """
+    Run the 4-check attendance analysis for the given period and return
+    JSON-serialisable results.  Called by the Attendance Summary Report page.
+
+    Args:
+        from_date: str  "YYYY-MM-DD"
+        to_date:   str  "YYYY-MM-DD"
+        employees: str  JSON list of employee IDs to restrict analysis to;
+                        pass an empty list or omit to analyse all.
+
+    Returns:
+        List of dicts, one per active employee, sorted by issue count desc.
+    """
+    results, _, _ = _run_analysis(from_date, to_date, employees)
     return results
+
+
+@frappe.whitelist()
+def export_attendance_summary_excel(from_date, to_date, employees=None):
+    """
+    Generate an XLSX workbook for the attendance summary and return it as a
+    base64-encoded payload so the browser can trigger a file download.
+
+    Returns:
+        {"filename": str, "content_type": str, "content": str (base64)}
+    """
+    import base64, io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    results, fd, td = _run_analysis(from_date, to_date, employees)
+
+    # ── Style helpers ──────────────────────────────────────────────────────
+
+    def _header_row(ws, hex_color):
+        fill = PatternFill("solid", fgColor=hex_color)
+        for cell in ws[1]:
+            cell.font      = Font(bold=True, color="FFFFFF")
+            cell.fill      = fill
+            cell.alignment = Alignment(horizontal="left")
+
+    def _col_widths(ws, widths):
+        for letter, w in widths.items():
+            ws.column_dimensions[letter].width = w
+
+    wb = Workbook()
+
+    # ── Summary sheet ──────────────────────────────────────────────────────
+    ws_sum = wb.active
+    ws_sum.title = "Summary"
+    ws_sum.append([
+        "Employee ID", "Employee Name",
+        "Missed Attendance", "Leave Applications",
+        "Short Leave", "Two Late \u2192 Half Day",
+        "Total Issues",
+    ])
+    _header_row(ws_sum, "2563EB")
+    for emp in results:
+        ws_sum.append([
+            emp["employee_id"],
+            emp["employee_name"],
+            len(emp["issues"].get("missed_attendance_request", [])),
+            len(emp["issues"].get("leave_application", [])),
+            len(emp["issues"].get("short_leave_application", [])),
+            len(emp["issues"].get("two_late_to_half_day", [])),
+            emp["total_issues"],
+        ])
+    _col_widths(ws_sum, {
+        "A": 16, "B": 30, "C": 20, "D": 22, "E": 14, "F": 24, "G": 14,
+    })
+
+    # ── Detail sheets (one per issue type) ────────────────────────────────
+    DETAIL_SHEETS = [
+        ("missed_attendance_request", "DC2626", "Missed Attendance"),
+        ("leave_application",         "EA580C", "Leave Applications"),
+        ("short_leave_application",   "2563EB", "Short Leave"),
+        ("two_late_to_half_day",      "7C3AED", "Two Late \u2192 Half Day"),
+    ]
+    DETAIL_HEADERS = [
+        "Employee ID", "Employee Name", "Date", "Status",
+        "In Time", "Out Time", "Shift", "Remarks", "Document ID",
+    ]
+
+    for issue_key, color, sheet_name in DETAIL_SHEETS:
+        ws = wb.create_sheet(sheet_name)
+        ws.append(DETAIL_HEADERS)
+        _header_row(ws, color)
+        for emp in results:
+            for rec in emp["issues"].get(issue_key, []):
+                ws.append([
+                    emp["employee_id"],
+                    emp["employee_name"],
+                    rec.get("attendance_date", ""),
+                    rec.get("status") or rec.get("custom_ucsc_status", ""),
+                    rec.get("in_time", ""),
+                    rec.get("out_time", ""),
+                    rec.get("shift", ""),
+                    rec.get("custom_remarks", ""),
+                    rec.get("name", ""),
+                ])
+        _col_widths(ws, {
+            "A": 16, "B": 30, "C": 14, "D": 20,
+            "E": 12, "F": 12, "G": 18, "H": 32, "I": 36,
+        })
+
+    # ── Serialise to base64 ────────────────────────────────────────────────
+    buf = io.BytesIO()
+    wb.save(buf)
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+
+    return {
+        "filename":     f"attendance_summary_{fd}_to_{td}.xlsx",
+        "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "content":      b64,
+    }
+
+
+@frappe.whitelist()
+def export_attendance_summary_pdf(from_date, to_date, employees=None):
+    """
+    Generate a PDF attendance summary report and return it as a
+    base64-encoded payload so the browser can trigger a file download.
+
+    Returns:
+        {"filename": str, "content_type": str, "content": str (base64)}
+    """
+    import base64
+    from frappe.utils import now_datetime
+    from frappe.utils.pdf import get_pdf
+
+    results, fd, td = _run_analysis(from_date, to_date, employees)
+    html = _build_pdf_html(results, fd, td)
+    pdf_bytes = get_pdf(html)
+    b64 = base64.b64encode(pdf_bytes).decode("ascii")
+
+    return {
+        "filename":     f"attendance_summary_{fd}_to_{td}.pdf",
+        "content_type": "application/pdf",
+        "content":      b64,
+    }
+
+
+def _build_pdf_html(results, from_date, to_date):
+    """Build a print-ready HTML string for the PDF attendance summary."""
+    from html import escape as esc
+    from frappe.utils import now_datetime
+
+    gen_date = str(now_datetime())[:16]
+    mdash    = "\u2014"  # used in f-string expressions (backslashes not allowed there)
+
+    # ── Aggregate stats ────────────────────────────────────────────────────
+    total_employees = len(results)
+    with_issues     = sum(1 for e in results if e["total_issues"] > 0)
+    counts = {
+        "missed_attendance_request": 0,
+        "leave_application":         0,
+        "short_leave_application":   0,
+        "two_late_to_half_day":      0,
+    }
+    for emp in results:
+        for k in counts:
+            counts[k] += len(emp["issues"].get(k, []))
+
+    # ── Summary table rows ─────────────────────────────────────────────────
+    summary_rows = ""
+    for i, emp in enumerate(results):
+        bg   = "#F9FAFB" if i % 2 == 0 else "#FFFFFF"
+        tot  = emp["total_issues"]
+        clr  = "#DC2626" if tot > 0 else "#166534"
+        summary_rows += (
+            f'<tr style="background:{bg};">'
+            f'<td>{esc(emp["employee_id"])}</td>'
+            f'<td>{esc(emp["employee_name"])}</td>'
+            f'<td style="text-align:center;">'
+            f'{len(emp["issues"].get("missed_attendance_request", []))}</td>'
+            f'<td style="text-align:center;">'
+            f'{len(emp["issues"].get("leave_application", []))}</td>'
+            f'<td style="text-align:center;">'
+            f'{len(emp["issues"].get("short_leave_application", []))}</td>'
+            f'<td style="text-align:center;">'
+            f'{len(emp["issues"].get("two_late_to_half_day", []))}</td>'
+            f'<td style="text-align:center;font-weight:700;color:{clr};">{tot}</td>'
+            f'</tr>'
+        )
+
+    # ── Per-employee detail sections (only employees with issues) ──────────
+    ISSUE_META = [
+        ("missed_attendance_request", "#DC2626", "Missed Attendance"),
+        ("leave_application",         "#EA580C", "Leave Applications"),
+        ("short_leave_application",   "#2563EB", "Short Leave"),
+        ("two_late_to_half_day",      "#7C3AED", "Two Late \u2192 Half Day"),
+    ]
+
+    detail_html = ""
+    for emp in results:
+        if not emp["total_issues"]:
+            continue
+        detail_html += (
+            f'<div class="emp-block">'
+            f'<div class="emp-header">'
+            f'{esc(emp["employee_name"])} '
+            f'<span style="font-weight:400;color:#6B7280;">({esc(emp["employee_id"])})</span>'
+            f'</div>'
+        )
+        for issue_key, color, label in ISSUE_META:
+            recs = emp["issues"].get(issue_key, [])
+            if not recs:
+                continue
+            detail_html += (
+                f'<p class="issue-type-label" style="color:{color};">'
+                f'{esc(label)} ({len(recs)})</p>'
+                f'<table>'
+                f'<thead><tr style="background:{color};">'
+                f'<th>Date</th><th>Status</th>'
+                f'<th>In Time</th><th>Out Time</th>'
+                f'<th>Shift</th><th>Remarks</th>'
+                f'</tr></thead><tbody>'
+            )
+            for j, rec in enumerate(recs):
+                row_bg   = "#F9FAFB" if j % 2 == 0 else "#FFFFFF"
+                st       = esc(rec.get("status") or rec.get("custom_ucsc_status", "\u2014"))
+                detail_html += (
+                    f'<tr style="background:{row_bg};">'
+                    f'<td>{esc(str(rec.get("attendance_date", "") or mdash))}</td>'
+                    f'<td>{st}</td>'
+                    f'<td>{esc(str(rec.get("in_time",  "") or mdash))}</td>'
+                    f'<td>{esc(str(rec.get("out_time", "") or mdash))}</td>'
+                    f'<td>{esc(str(rec.get("shift",    "") or mdash))}</td>'
+                    f'<td>{esc(str(rec.get("custom_remarks", "") or mdash))}</td>'
+                    f'</tr>'
+                )
+            detail_html += "</tbody></table>"
+        detail_html += "</div>"
+
+    # ── Assemble full HTML ─────────────────────────────────────────────────
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  body {{
+    font-family: Arial, sans-serif;
+    font-size: 11px;
+    color: #1F2937;
+    margin: 0;
+    padding: 24px 28px;
+  }}
+  h1 {{
+    font-size: 20px;
+    color: #1E40AF;
+    margin: 0 0 3px;
+  }}
+  .subtitle {{
+    font-size: 11px;
+    color: #6B7280;
+    margin-bottom: 20px;
+  }}
+  .stats-grid {{
+    display: table;
+    width: 100%;
+    margin-bottom: 22px;
+    border-collapse: separate;
+    border-spacing: 8px 0;
+  }}
+  .stat-cell {{
+    display: table-cell;
+    width: 16%;
+    border: 1px solid #E5E7EB;
+    border-radius: 4px;
+    text-align: center;
+    padding: 8px 4px;
+    vertical-align: middle;
+  }}
+  .stat-val {{
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.1;
+  }}
+  .stat-lbl {{
+    font-size: 9px;
+    color: #6B7280;
+    margin-top: 3px;
+    line-height: 1.3;
+  }}
+  h2 {{
+    font-size: 13px;
+    color: #1E40AF;
+    border-bottom: 2px solid #2563EB;
+    padding-bottom: 5px;
+    margin: 22px 0 10px;
+  }}
+  table {{
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 14px;
+    font-size: 10px;
+  }}
+  th {{
+    color: #FFFFFF;
+    padding: 6px 8px;
+    text-align: left;
+    font-weight: 600;
+  }}
+  td {{
+    padding: 5px 8px;
+    border: 1px solid #E5E7EB;
+  }}
+  .summary-thead th {{
+    background: #2563EB;
+  }}
+  .emp-block {{
+    margin-bottom: 18px;
+    page-break-inside: avoid;
+  }}
+  .emp-header {{
+    background: #EFF6FF;
+    border-left: 4px solid #2563EB;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #1E40AF;
+    margin-bottom: 6px;
+  }}
+  .issue-type-label {{
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin: 8px 0 3px;
+  }}
+  .page-break {{
+    page-break-after: always;
+  }}
+</style>
+</head>
+<body>
+
+<h1>Attendance Summary Report</h1>
+<p class="subtitle">
+  Period: <strong>{esc(str(from_date))}</strong> to <strong>{esc(str(to_date))}</strong>
+  &nbsp;&nbsp;|&nbsp;&nbsp;Generated: {esc(gen_date)}
+</p>
+
+<!-- Statistics -->
+<div class="stats-grid">
+  <div class="stat-cell" style="border-top:3px solid #2563EB;">
+    <div class="stat-val" style="color:#2563EB;">{total_employees}</div>
+    <div class="stat-lbl">Employees Analysed</div>
+  </div>
+  <div class="stat-cell" style="border-top:3px solid #DC2626;">
+    <div class="stat-val" style="color:#DC2626;">{with_issues}</div>
+    <div class="stat-lbl">With Issues</div>
+  </div>
+  <div class="stat-cell" style="border-top:3px solid #DC2626;">
+    <div class="stat-val" style="color:#DC2626;">{counts["missed_attendance_request"]}</div>
+    <div class="stat-lbl">Missed Attendance</div>
+  </div>
+  <div class="stat-cell" style="border-top:3px solid #EA580C;">
+    <div class="stat-val" style="color:#EA580C;">{counts["leave_application"]}</div>
+    <div class="stat-lbl">Leave Applications</div>
+  </div>
+  <div class="stat-cell" style="border-top:3px solid #2563EB;">
+    <div class="stat-val" style="color:#2563EB;">{counts["short_leave_application"]}</div>
+    <div class="stat-lbl">Short Leave</div>
+  </div>
+  <div class="stat-cell" style="border-top:3px solid #7C3AED;">
+    <div class="stat-val" style="color:#7C3AED;">{counts["two_late_to_half_day"]}</div>
+    <div class="stat-lbl">Two Late &rarr; Half Day</div>
+  </div>
+</div>
+
+<!-- Summary table -->
+<h2>Employee Summary</h2>
+<table>
+  <thead class="summary-thead">
+    <tr>
+      <th>Employee ID</th>
+      <th>Employee Name</th>
+      <th style="text-align:center;">Missed</th>
+      <th style="text-align:center;">Leave</th>
+      <th style="text-align:center;">Short Leave</th>
+      <th style="text-align:center;">Two Late</th>
+      <th style="text-align:center;">Total</th>
+    </tr>
+  </thead>
+  <tbody>
+    {summary_rows}
+  </tbody>
+</table>
+
+<!-- Detailed breakdown (employees with issues only) -->
+<div class="page-break"></div>
+<h2>Detailed Breakdown</h2>
+{detail_html if detail_html else
+ '<p style="color:#6B7280;font-style:italic;">No attendance issues found for this period.</p>'}
+
+</body>
+</html>"""
 
 
 @frappe.whitelist()
