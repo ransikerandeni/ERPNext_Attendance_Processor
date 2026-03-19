@@ -165,12 +165,22 @@ Then run `bench restart` for changes to take effect.
 
 ## Desk Pages
 
-Both pages are accessible only to authenticated ERPNext users. Navigating directly to either URL will redirect unauthenticated visitors to the login page.
+All pages are accessible only to authenticated ERPNext users. Navigating directly to any URL will redirect unauthenticated visitors to the login page.
 
 | Page | URL | Access |
 |---|---|---|
+| Attendance Processor Home | `/app/attendance-processor-home` | All authenticated users |
 | Attendance Summary Report | `/app/attendance-summary-report` | System Manager, HR Manager |
-| Approver Summary | `/app/approver-summary` | All authenticated users (filtered by role — see below) |
+| Approver Summary | `/app/approver-summary` | System Manager, HR Manager, Department Head Attendance Appr |
+
+> **Example full URLs** (replace `<your-site>` with your actual site domain, e.g. `ucsctest_site.com`):
+> - `https://<your-site>/app/attendance-processor-home`
+> - `https://<your-site>/app/attendance-summary-report`
+> - `https://<your-site>/app/approver-summary`
+
+### Attendance Processor Home
+
+The Home page is the recommended entry point for all users. It displays role-aware cards that link to the pages the current user is permitted to access. The **Attendance Summary Report** card is visible to all users; the **Approver Summary** card is shown only to System Managers and users with the `Department Head Attendance Appr` role.
 
 ---
 
@@ -178,8 +188,9 @@ Both pages are accessible only to authenticated ERPNext users. Navigating direct
 
 ### Attendance Summary Report (HR / System Manager)
 
-**Navigate to:** ERPNext Desk → *Attendance Summary Report*
-or go to `/app/attendance-summary-report`
+**Navigate to:** ERPNext Desk → *Attendance Processor Home* → **Attendance Summary Report** card
+or go directly to `/app/attendance-summary-report`
+(full URL: `https://<your-site>/app/attendance-summary-report`)
 
 This page is the primary HR dashboard for reviewing and acting on attendance issues.
 
@@ -221,8 +232,9 @@ The **Send Emails** button (visible only to System Managers) opens a confirmatio
 
 ### Approver Summary (Leave Approvers)
 
-**Navigate to:** ERPNext Desk → *Approver Summary*
-or go to `/app/approver-summary`
+**Navigate to:** ERPNext Desk → *Attendance Processor Home* → **Approver Summary** card
+or go directly to `/app/approver-summary`
+(full URL: `https://<your-site>/app/approver-summary`)
 
 This page lets leave approvers review all **pending** applications belonging to their direct reports in one place.
 
