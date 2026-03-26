@@ -785,9 +785,9 @@ def send_test_email_to_employee(employee, period_type="weekly",
     total_issues  = sum(len(v) for v in issues.values())
 
     if total_issues > 0:
-        subject = f"[TEST] [Action Required] Attendance Summary — {period_label}"
+        subject = f"Attendance Summary — {period_label}"
     else:
-        subject = f"[TEST] Attendance Summary — {period_label} (No Issues)"
+        subject = f"Attendance Summary — {period_label} (No Issues)"
 
     html_body = build_html_email(employee_name, issues, period_label)
 
