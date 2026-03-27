@@ -34,7 +34,7 @@ def get_approver_summary(from_date, to_date):
             filters=[
                 ["from_date", "<=", td],
                 ["to_date", ">=", fd],
-                ["status", "in", ["Open", "Approved"]],
+                ["status", "=", "Open"],
                 ["docstatus", "!=", 2],
             ],
             fields=[
@@ -49,6 +49,7 @@ def get_approver_summary(from_date, to_date):
             filters=[
                 ["attendance_date", ">=", fd],
                 ["second_attendance_date", "<=", td],
+                ["status", "=", "Department Head Review"],
                 ["docstatus", "!=", 2],
             ],
             fields=[
@@ -62,6 +63,7 @@ def get_approver_summary(from_date, to_date):
             filters=[
                 ["attendance_date", ">=", fd],
                 ["attendance_date", "<=", td],
+                ["status", "=", "Waiting for Department Head Review"],
                 ["docstatus", "!=", 2],
             ],
             fields=[
@@ -75,6 +77,7 @@ def get_approver_summary(from_date, to_date):
             filters=[
                 ["attendance_date", ">=", fd],
                 ["attendance_date", "<=", td],
+                ["status", "=", "Department Head Review"],
                 ["docstatus", "!=", 2],
             ],
             fields=[
