@@ -12,6 +12,10 @@ from attendance_processor.utils.processor import (
 from attendance_processor.utils.email_report import (
     send_summary_email,
 )
+from attendance_processor.utils.approver_report import (
+    fetch_approver_data,
+    send_approver_summary_email,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -99,11 +103,10 @@ def _run_for_period(from_date, to_date, period_label):
                 f"({data['name']}): {exc}",
                 title="Attendance Summary: Processing Error",
             )
+            skipped += 1
+            continue
 
         processed += 1
-
-    # 5. Commit once after all employees have been processed
-    frappe.db.commit()
 
     logger.info(
         f"Attendance summary job completed | period: {period_label} | "
@@ -150,6 +153,64 @@ def send_monthly_attendance_summary():
 
     period_label = last_prev.strftime("%B %Y") + " (Monthly)"
     _run_for_period(first_prev, last_prev, period_label)
+
+
+def send_approver_attendance_summary(from_date=None, to_date=None, lookback_days=90):
+    """
+    Send a pending-applications summary email to every Leave Approver.
+
+    When ``from_date`` and ``to_date`` are supplied they are used directly.
+    Otherwise the window is the last ``lookback_days`` days up to today.
+
+    Args:
+        from_date:     date-like or None — explicit period start
+        to_date:       date-like or None — explicit period end
+        lookback_days: int — fallback lookback when dates are not provided (default: 90)
+    """
+    today = getdate(nowdate())
+
+    if from_date and to_date:
+        from_date    = getdate(from_date)
+        to_date      = getdate(to_date)
+        period_label = f"{from_date} to {to_date}"
+    else:
+        from_date    = add_days(today, -int(lookback_days))
+        to_date      = today
+        period_label = f"Last {lookback_days} Days (as of {today})"
+
+    logger = frappe.logger("attendance_processor")
+    logger.info(
+        f"Approver summary job started | period: {period_label} "
+        f"({from_date} to {to_date})"
+    )
+
+    grouped = fetch_approver_data(from_date, to_date)
+
+    sent    = 0
+    skipped = 0
+
+    for approver_user_id, data in grouped.items():
+        approver_name = data.get("approver_name", approver_user_id)
+        try:
+            send_approver_summary_email(
+                approver_user_id,
+                approver_name,
+                data,
+                period_label,
+            )
+            sent += 1
+        except Exception as exc:
+            frappe.log_error(
+                f"Error sending approver summary to {approver_user_id} "
+                f"({approver_name}): {exc}",
+                title="Approver Summary: Processing Error",
+            )
+            skipped += 1
+
+    logger.info(
+        f"Approver summary job completed | period: {period_label} | "
+        f"sent: {sent} | skipped: {skipped}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -200,6 +261,23 @@ def run_scheduled_reports():
                 frappe.db.set_value(
                     "Attendance Processor Settings", None,
                     "monthly_last_sent", today,
+                    update_modified=False,
+                )
+                frappe.db.commit()
+
+    # ── Approver Summary ─────────────────────────────────────────────────
+    if settings.enable_approver_summary:
+        send_day  = settings.approver_summary_send_day or "Monday"
+        send_hour = get_time(settings.approver_summary_send_time).hour if settings.approver_summary_send_time else 8
+
+        if now.strftime("%A") == send_day and now.hour == send_hour:
+            last_sent = getdate(settings.approver_summary_last_sent) if settings.approver_summary_last_sent else None
+            if last_sent != today:
+                lookback = int(settings.approver_summary_lookback_days or 90)
+                send_approver_attendance_summary(lookback_days=lookback)
+                frappe.db.set_value(
+                    "Attendance Processor Settings", None,
+                    "approver_summary_last_sent", today,
                     update_modified=False,
                 )
                 frappe.db.commit()

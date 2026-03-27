@@ -47,8 +47,8 @@ def get_approver_summary(from_date, to_date):
         two_late_applications = frappe.db.get_all(
             "Two Late Attendance To One Half Day",
             filters=[
-                ["attendance_date", ">=", fd],
-                ["second_attendance_date", "<=", td],
+                ["attendance_date", "<=", td],
+                ["second_attendance_date", ">=", fd],
                 ["status", "=", "Department Head Review"],
                 ["docstatus", "!=", 2],
             ],
@@ -103,18 +103,25 @@ def get_approver_summary(from_date, to_date):
         # Cache: { employee_id: {"leave_approver": ..., "department": ...,
         #                         "employee_name": ...} }
         emp_cache = {}
-        for emp_id in unique_employees:
-            info = frappe.db.get_value(
+        if unique_employees:
+            emp_records = frappe.db.get_all(
                 "Employee",
-                emp_id,
-                ["leave_approver", "department", "employee_name"],
-                as_dict=True,
+                filters={"name": ["in", list(unique_employees)]},
+                fields=["name", "leave_approver", "department", "employee_name"],
             )
-            emp_cache[emp_id] = info or {
-                "leave_approver": None,
-                "department": None,
-                "employee_name": emp_id,
-            }
+            for emp in emp_records:
+                emp_cache[emp.name] = {
+                    "leave_approver": emp.leave_approver,
+                    "department":     emp.department,
+                    "employee_name":  emp.employee_name,
+                }
+        for emp_id in unique_employees:
+            if emp_id not in emp_cache:
+                emp_cache[emp_id] = {
+                    "leave_approver": None,
+                    "department": None,
+                    "employee_name": emp_id,
+                }
 
         # ------------------------------------------------------------------
         # STEP 3 — Group records by leave_approver
@@ -122,17 +129,27 @@ def get_approver_summary(from_date, to_date):
 
         NO_APPROVER_KEY = "No Approver Assigned"
 
-        # Cache approver full names: { user_id: full_name }
+        # Batch-fetch approver full names
+        unique_approver_ids = {
+            emp_cache[e].get("leave_approver")
+            for e in emp_cache
+            if emp_cache[e].get("leave_approver")
+        }
         approver_name_cache = {}
+        if unique_approver_ids:
+            approver_records = frappe.db.get_all(
+                "User",
+                filters={"name": ["in", list(unique_approver_ids)]},
+                fields=["name", "full_name"],
+            )
+            for user in approver_records:
+                approver_name_cache[user.name] = user.full_name or user.name
 
         def _approver_key_name(user_id):
             """Return (key, display_name) for an approver user_id."""
             if not user_id:
                 return NO_APPROVER_KEY, NO_APPROVER_KEY
-            if user_id not in approver_name_cache:
-                full_name = frappe.db.get_value("User", user_id, "full_name")
-                approver_name_cache[user_id] = full_name or user_id
-            return user_id, approver_name_cache[user_id]
+            return user_id, approver_name_cache.get(user_id, user_id)
 
         grouped = {}
 

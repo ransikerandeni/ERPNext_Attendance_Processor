@@ -1,13 +1,17 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Attendance Processor Settings — custom form JS
-// Adds "Send Weekly Now" and "Send Monthly Now" buttons so an admin can
-// trigger the report jobs directly from the browser without using the terminal.
+//
+// Button groups (System Manager only):
+//   "Attendance Summary" — employee-facing attendance report emails
+//   "Approver Summary"   — leave-approver pending-applications emails
 // ─────────────────────────────────────────────────────────────────────────────
 
 frappe.ui.form.on("Attendance Processor Settings", {
 	refresh(frm) {
 		// Only expose the buttons to System Managers
 		if (!frappe.user_roles.includes("System Manager")) return;
+
+		// ── Attendance Summary ────────────────────────────────────────────────
 
 		frm.add_custom_button(
 			__("Send Weekly Report Now"),
@@ -34,7 +38,7 @@ frappe.ui.form.on("Attendance Processor Settings", {
 					}
 				);
 			},
-			__("Actions")
+			__("Attendance Summary")
 		);
 
 		frm.add_custom_button(
@@ -62,7 +66,7 @@ frappe.ui.form.on("Attendance Processor Settings", {
 					}
 				);
 			},
-			__("Actions")
+			__("Attendance Summary")
 		);
 
 		frm.add_custom_button(
@@ -83,12 +87,12 @@ frappe.ui.form.on("Attendance Processor Settings", {
 							fieldname: "period_type",
 							fieldtype: "Select",
 							options: [
-							{ value: "now",     label: __("Now (Today)") },
-							{ value: "weekly",  label: __("Last Week") },
-							{ value: "monthly", label: __("Last Month") },
-							{ value: "custom",  label: __("Custom Date Range") },
-						],
-						default: "now",
+								{ value: "now",     label: __("Now (Today)") },
+								{ value: "weekly",  label: __("Last Week") },
+								{ value: "monthly", label: __("Last Month") },
+								{ value: "custom",  label: __("Custom Date Range") },
+							],
+							default: "now",
 							reqd: 1,
 						},
 						{
@@ -140,7 +144,153 @@ frappe.ui.form.on("Attendance Processor Settings", {
 				});
 				dialog.show();
 			},
-			__("Actions")
+			__("Attendance Summary")
+		);
+
+		// ── Approver Summary ──────────────────────────────────────────────────
+
+		frm.add_custom_button(
+			__("Send Approver Summary Now"),
+			function () {
+				const dialog = new frappe.ui.Dialog({
+					title: __("Send Approver Summary Emails"),
+					fields: [
+						{
+							label: __("Date Range"),
+							fieldname: "range_type",
+							fieldtype: "Select",
+							options: [
+								{ value: "settings", label: __("Use Settings Lookback Period") },
+								{ value: "custom",   label: __("Custom Date Range") },
+							],
+							default: "settings",
+							reqd: 1,
+						},
+						{
+							label: __("From Date"),
+							fieldname: "from_date",
+							fieldtype: "Date",
+							depends_on: 'eval:doc.range_type==="custom"',
+							mandatory_depends_on: 'eval:doc.range_type==="custom"',
+						},
+						{
+							label: __("To Date"),
+							fieldname: "to_date",
+							fieldtype: "Date",
+							depends_on: 'eval:doc.range_type==="custom"',
+							mandatory_depends_on: 'eval:doc.range_type==="custom"',
+						},
+						{
+							fieldtype: "HTML",
+							options: `<p class="text-muted small" style="margin:4px 0 0;">
+								This will email every Leave Approver who has pending applications
+								within the selected period.
+							</p>`,
+						},
+					],
+					primary_action_label: __("Queue Emails"),
+					primary_action(values) {
+						dialog.hide();
+						const useCustom = values.range_type === "custom";
+						frappe.call({
+							method: "attendance_processor.utils.api.trigger_approver_summary",
+							args: {
+								from_date: useCustom ? (values.from_date || null) : null,
+								to_date:   useCustom ? (values.to_date   || null) : null,
+							},
+							freeze: true,
+							freeze_message: __("Queueing approver summary job…"),
+							callback(r) {
+								if (r.message && r.message.status === "queued") {
+									frappe.show_alert(
+										{ message: __(r.message.message), indicator: "green" },
+										8
+									);
+								}
+							},
+						});
+					},
+				});
+				dialog.show();
+			},
+			__("Approver Summary")
+		);
+
+		frm.add_custom_button(
+			__("Send Test Approver Email"),
+			function () {
+				const dialog = new frappe.ui.Dialog({
+					title: __("Send Test Approver Summary Email"),
+					fields: [
+						{
+							label: __("Send To (Approver User)"),
+							fieldname: "approver_user",
+							fieldtype: "Link",
+							options: "User",
+							reqd: 1,
+							description: __("The ERPNext user who acts as a Leave Approver."),
+						},
+						{
+							label: __("Date Range"),
+							fieldname: "range_type",
+							fieldtype: "Select",
+							options: [
+								{ value: "settings", label: __("Use Settings Lookback Period") },
+								{ value: "custom",   label: __("Custom Date Range") },
+							],
+							default: "settings",
+							reqd: 1,
+						},
+						{
+							label: __("From Date"),
+							fieldname: "from_date",
+							fieldtype: "Date",
+							depends_on: 'eval:doc.range_type==="custom"',
+							mandatory_depends_on: 'eval:doc.range_type==="custom"',
+						},
+						{
+							label: __("To Date"),
+							fieldname: "to_date",
+							fieldtype: "Date",
+							depends_on: 'eval:doc.range_type==="custom"',
+							mandatory_depends_on: 'eval:doc.range_type==="custom"',
+						},
+					],
+					primary_action_label: __("Send Test Email"),
+					primary_action(values) {
+						dialog.hide();
+						const useCustom = values.range_type === "custom";
+						frappe.call({
+							method: "attendance_processor.utils.api.send_test_approver_email",
+							args: {
+								approver_user: values.approver_user,
+								from_date:     useCustom ? (values.from_date || null) : null,
+								to_date:       useCustom ? (values.to_date   || null) : null,
+							},
+							freeze: true,
+							freeze_message: __("Sending test approver email…"),
+							callback(r) {
+								if (r.message) {
+									if (r.message.status === "sent") {
+										frappe.show_alert(
+											{ message: __(r.message.message), indicator: "green" },
+											10
+										);
+									} else if (r.message.status === "error") {
+										frappe.msgprint({
+											title:     __("Email Send Failed"),
+											message:   __(r.message.message),
+											indicator: "red",
+										});
+									}
+								}
+							},
+						});
+					},
+				});
+				dialog.show();
+			},
+			__("Approver Summary")
 		);
 	},
 });
