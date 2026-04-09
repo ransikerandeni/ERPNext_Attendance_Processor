@@ -632,8 +632,9 @@ class AttendanceSummaryReport {
 
 			// derive the best display status
 			var status = es(rec.status || rec.custom_ucsc_status);
-			var in_t   = es(rec.in_time);
-			var out_t  = es(rec.out_time);
+			var trim_time = t => t ? String(t).replace(/(\d{2}:\d{2}:\d{2})\.\d+/, "$1") : null;
+			var in_t   = es(trim_time(rec.in_time));
+			var out_t  = es(trim_time(rec.out_time));
 			var att_dt = es(rec.attendance_date);
 			var shift  = es(rec.shift);
 			var remark = es(rec.custom_remarks);
