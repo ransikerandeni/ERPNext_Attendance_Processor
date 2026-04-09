@@ -224,11 +224,3 @@ scheduler_events = {
 # 	"attendance_processor.auth.validate"
 # ]
 
-scheduler_events = {
-	"weekly_long": [
-		"attendance_processor.scheduler.send_weekly_attendance_summary"
-	],
-	"monthly_long": [
-		"attendance_processor.scheduler.send_monthly_attendance_summary"
-	],
-}

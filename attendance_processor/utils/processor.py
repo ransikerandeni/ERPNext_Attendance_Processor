@@ -274,7 +274,7 @@ def classify_short_leave_records(pending_rows, emp_short_dates, emp_two_late):
     # A Two Late application needs exactly 2 records. If only 1 was promoted,
     # demote it back to short_leave or overflow.
     for month_key, count in promoted_per_month.items():
-        if count != 1:
+        if count % 2 == 0:
             continue
 
         demote_rec = next(

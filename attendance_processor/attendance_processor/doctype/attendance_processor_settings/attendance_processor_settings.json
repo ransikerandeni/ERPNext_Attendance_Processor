@@ -5,31 +5,45 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
-  "weekly_section",
+  "attendance_summary_section",
+  "weekly_report_html",
   "enable_weekly_report",
-  "col_break_1",
   "weekly_send_day",
   "weekly_send_time",
-  "col_break_2",
   "weekly_last_sent",
-  "monthly_section",
+  "col_break_1",
+  "monthly_report_html",
   "enable_monthly_report",
-  "col_break_3",
   "monthly_send_day",
   "monthly_send_time",
-  "col_break_4",
   "monthly_last_sent",
   "email_template_section",
   "email_intro_text",
   "email_no_issues_text",
   "email_signature",
-  "email_footer_note"
+  "email_footer_note",
+  "approver_section",
+  "enable_approver_summary",
+  "col_break_5",
+  "approver_summary_send_day",
+  "approver_summary_send_time",
+  "col_break_6",
+  "approver_summary_lookback_days",
+  "approver_summary_last_sent",
+  "approver_email_template_section",
+  "approver_email_intro_text",
+  "approver_email_no_pending_text"
  ],
  "fields": [
   {
-   "fieldname": "weekly_section",
+   "fieldname": "attendance_summary_section",
    "fieldtype": "Section Break",
-   "label": "Weekly Attendance Report"
+   "label": "Attendance Summary"
+  },
+  {
+   "fieldname": "weekly_report_html",
+   "fieldtype": "HTML",
+   "options": "<p style=\"font-weight:600;font-size:13px;color:#6b7280;text-transform:uppercase;letter-spacing:.6px;margin:4px 0 12px;\">Weekly Report</p>"
   },
   {
    "default": "1",
@@ -37,10 +51,6 @@
    "fieldname": "enable_weekly_report",
    "fieldtype": "Check",
    "label": "Enable Weekly Report"
-  },
-  {
-   "fieldname": "col_break_1",
-   "fieldtype": "Column Break"
   },
   {
    "default": "Monday",
@@ -60,19 +70,19 @@
    "label": "Send Time"
   },
   {
-   "fieldname": "col_break_2",
-   "fieldtype": "Column Break"
-  },
-  {
    "fieldname": "weekly_last_sent",
    "fieldtype": "Date",
    "label": "Last Weekly Report Sent On",
    "read_only": 1
   },
   {
-   "fieldname": "monthly_section",
-   "fieldtype": "Section Break",
-   "label": "Monthly Attendance Report"
+   "fieldname": "col_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "monthly_report_html",
+   "fieldtype": "HTML",
+   "options": "<p style=\"font-weight:600;font-size:13px;color:#6b7280;text-transform:uppercase;letter-spacing:.6px;margin:4px 0 12px;\">Monthly Report</p>"
   },
   {
    "default": "1",
@@ -80,10 +90,6 @@
    "fieldname": "enable_monthly_report",
    "fieldtype": "Check",
    "label": "Enable Monthly Report"
-  },
-  {
-   "fieldname": "col_break_3",
-   "fieldtype": "Column Break"
   },
   {
    "default": "1",
@@ -102,10 +108,6 @@
    "label": "Send Time"
   },
   {
-   "fieldname": "col_break_4",
-   "fieldtype": "Column Break"
-  },
-  {
    "fieldname": "monthly_last_sent",
    "fieldtype": "Date",
    "label": "Last Monthly Report Sent On",
@@ -115,7 +117,7 @@
    "collapsible": 1,
    "fieldname": "email_template_section",
    "fieldtype": "Section Break",
-   "label": "Email Template"
+   "label": "Attendance Summary Email Template"
   },
   {
    "description": "Shown above the issue tables when the employee has pending items. Use {count} as a placeholder for the number of issues. Leave blank to use the built-in default.",
@@ -140,11 +142,80 @@
    "fieldname": "email_footer_note",
    "fieldtype": "Long Text",
    "label": "Footer Disclaimer"
+  },
+  {
+   "fieldname": "approver_section",
+   "fieldtype": "Section Break",
+   "label": "Approver Summary"
+  },
+  {
+   "default": "1",
+   "description": "When enabled, a summary of pending applications is emailed to each Leave Approver on the configured day and time.",
+   "fieldname": "enable_approver_summary",
+   "fieldtype": "Check",
+   "label": "Enable Approver Summary Email"
+  },
+  {
+   "fieldname": "col_break_5",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Monday",
+   "depends_on": "eval:doc.enable_approver_summary",
+   "description": "Day of the week on which the approver summary email will be sent.",
+   "fieldname": "approver_summary_send_day",
+   "fieldtype": "Select",
+   "label": "Send On (Day of Week)",
+   "options": "Monday\nTuesday\nWednesday\nThursday\nFriday\nSaturday\nSunday"
+  },
+  {
+   "default": "08:00:00",
+   "depends_on": "eval:doc.enable_approver_summary",
+   "description": "Time of day at which the approver summary will be triggered (matched to the hour by the hourly scheduler).",
+   "fieldname": "approver_summary_send_time",
+   "fieldtype": "Time",
+   "label": "Send Time"
+  },
+  {
+   "fieldname": "col_break_6",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "90",
+   "depends_on": "eval:doc.enable_approver_summary",
+   "description": "Number of days to look back when fetching pending applications (e.g. 90 captures any application submitted in the last 3 months).",
+   "fieldname": "approver_summary_lookback_days",
+   "fieldtype": "Int",
+   "label": "Lookback Period (Days)"
+  },
+  {
+   "fieldname": "approver_summary_last_sent",
+   "fieldtype": "Date",
+   "label": "Last Approver Summary Sent On",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "approver_email_template_section",
+   "fieldtype": "Section Break",
+   "label": "Approver Summary Email Template"
+  },
+  {
+   "description": "Shown above the pending-applications tables when the approver has items to action. Leave blank to use the built-in default.",
+   "fieldname": "approver_email_intro_text",
+   "fieldtype": "Long Text",
+   "label": "Intro Text (Pending Items Found)"
+  },
+  {
+   "description": "Shown in the green banner when the approver has no pending applications for the period. Leave blank to use the built-in default.",
+   "fieldname": "approver_email_no_pending_text",
+   "fieldtype": "Long Text",
+   "label": "No Pending Items Text"
   }
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-03-11 00:00:00.000000",
+ "modified": "2026-03-27 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Attendance Processor",
  "name": "Attendance Processor Settings",

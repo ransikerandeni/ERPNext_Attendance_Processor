@@ -563,7 +563,7 @@ def send_attendance_emails(from_date, to_date, employee=None,
         allowed = json.loads(selected_employees) if isinstance(selected_employees, str) else selected_employees
 
     frappe.enqueue(
-        "attendance_processor.attendance_processor.utils.api._do_send_emails",
+        "attendance_processor.utils.api._do_send_emails",
         from_date=from_date,
         to_date=to_date,
         employee=employee or None,
@@ -697,8 +697,6 @@ def _do_send_emails(from_date, to_date, employee=None,
                 title="Attendance Summary: Email Send Failed",
             )
 
-    frappe.db.commit()
-
 
 # ---------------------------------------------------------------------------
 # Manual trigger API — called from the Settings form "Send Now" buttons
@@ -724,7 +722,7 @@ def send_test_email_to_employee(employee, period_type="weekly",
     if "System Manager" not in frappe.get_roles():
         frappe.throw(frappe._("Not permitted"), frappe.PermissionError)
 
-    from frappe.utils import getdate, nowdate, add_days, get_first_day
+    from frappe.utils import nowdate, add_days, get_first_day
 
     if period_type == "now":
         today        = getdate(nowdate())
@@ -859,3 +857,140 @@ def trigger_monthly_report():
         "message": "Monthly attendance summary job has been queued. "
                    "Emails will be delivered in the background.",
     }
+
+
+@frappe.whitelist()
+def trigger_approver_summary(from_date=None, to_date=None):
+    """
+    Enqueue the approver summary job immediately (on-demand).
+    When from_date and to_date are provided they are used directly; otherwise
+    the Lookback Period from Attendance Processor Settings is applied.
+    Restricted to System Manager.
+
+    Args:
+        from_date: Optional YYYY-MM-DD string for the period start.
+        to_date:   Optional YYYY-MM-DD string for the period end.
+
+    Returns:
+        {"status": "queued", "message": str}
+    """
+    if "System Manager" not in frappe.get_roles():
+        frappe.throw(frappe._("Not permitted"), frappe.PermissionError)
+
+    if from_date and to_date:
+        fd = getdate(from_date)
+        td = getdate(to_date)
+        frappe.enqueue(
+            "attendance_processor.scheduler.send_approver_attendance_summary",
+            queue="long",
+            timeout=3600,
+            from_date=str(fd),
+            to_date=str(td),
+        )
+        return {
+            "status":  "queued",
+            "message": f"Approver summary job has been queued for {fd} to {td}. "
+                       "Emails will be delivered in the background.",
+        }
+    else:
+        try:
+            settings = frappe.get_single("Attendance Processor Settings")
+            lookback = int(settings.approver_summary_lookback_days or 90)
+        except Exception:
+            lookback = 90
+
+        frappe.enqueue(
+            "attendance_processor.scheduler.send_approver_attendance_summary",
+            queue="long",
+            timeout=3600,
+            lookback_days=lookback,
+        )
+        return {
+            "status":  "queued",
+            "message": f"Approver summary job has been queued (last {lookback} days). "
+                       "Emails will be delivered in the background.",
+        }
+
+
+@frappe.whitelist()
+def send_test_approver_email(approver_user, from_date=None, to_date=None, lookback_days=None):
+    """
+    Send a test approver summary email to the specified User immediately.
+    Restricted to System Manager.
+
+    Args:
+        approver_user:  ERPNext User ID to send the test email to.
+        from_date:      Optional explicit from_date (YYYY-MM-DD).
+        to_date:        Optional explicit to_date (YYYY-MM-DD).
+        lookback_days:  Days to look back when from_date/to_date are omitted.
+                        Falls back to the value in Settings (default 90).
+
+    Returns:
+        {"status": "sent"|"error", "message": str}
+    """
+    if "System Manager" not in frappe.get_roles():
+        frappe.throw(frappe._("Not permitted"), frappe.PermissionError)
+
+    from frappe.utils import nowdate, add_days
+    from attendance_processor.utils.approver_report import (
+        fetch_approver_data,
+        build_approver_html_email,
+        send_approver_summary_email,
+    )
+
+    # Resolve date range
+    if from_date and to_date:
+        fd = getdate(from_date)
+        td = getdate(to_date)
+        period_label = f"{fd} to {td}"
+    else:
+        if lookback_days is not None:
+            lb = int(lookback_days)
+        else:
+            try:
+                settings = frappe.get_single("Attendance Processor Settings")
+                lb = int(settings.approver_summary_lookback_days or 90)
+            except Exception:
+                lb = 90
+        td = getdate(nowdate())
+        fd = add_days(td, -lb)
+        period_label = f"Last {lb} Days (as of {td})"
+
+    period_label += " (Test)"
+
+    # Resolve approver display name
+    approver_name = frappe.db.get_value("User", approver_user, "full_name") or approver_user
+
+    # Fetch data for ALL approvers, then extract only the target approver's slice
+    grouped_all = fetch_approver_data(fd, td)
+    approver_data = grouped_all.get(approver_user, {
+        "approver_name":             approver_name,
+        "leave_applications":        [],
+        "two_late_applications":     [],
+        "short_leave_applications":  [],
+        "missed_attendance_requests": [],
+    })
+
+    try:
+        send_approver_summary_email(
+            approver_user,
+            approver_name,
+            approver_data,
+            period_label,
+        )
+        total = (
+            len(approver_data.get("leave_applications", []))
+            + len(approver_data.get("two_late_applications", []))
+            + len(approver_data.get("short_leave_applications", []))
+            + len(approver_data.get("missed_attendance_requests", []))
+        )
+        return {
+            "status":  "sent",
+            "message": f"Test approver summary sent to {approver_user} "
+                       f"({total} pending item(s) found for the period).",
+        }
+    except Exception as exc:
+        return {
+            "status":  "error",
+            "message": str(exc),
+        }
