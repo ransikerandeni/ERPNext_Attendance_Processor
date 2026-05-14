@@ -11,6 +11,10 @@ frappe.ui.form.on("Attendance Processor Settings", {
 		// Only expose the buttons to System Managers
 		if (!frappe.user_roles.includes("System Manager")) return;
 
+		frm.add_custom_button(__("Home"), function () {
+			frappe.set_route("attendance-processor-home");
+		});
+
 		// ── Attendance Summary ────────────────────────────────────────────────
 
 		frm.add_custom_button(

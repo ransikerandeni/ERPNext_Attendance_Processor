@@ -207,6 +207,10 @@ class AttendanceSummaryReport {
 	_setup_actions() {
 		var me = this;
 
+		this.page.add_button(__("Home"), function () {
+			frappe.set_route("attendance-processor-home");
+		}, { icon: "home", btn_class: "btn-default" });
+
 		this.page.set_primary_action(__("Preview Report"), function () {
 			me._load_data();
 		}, "search");

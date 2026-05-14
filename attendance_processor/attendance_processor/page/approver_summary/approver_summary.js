@@ -214,6 +214,10 @@ class ApproverSummaryPage {
 	// ── Primary action ─────────────────────────────────────────────────────
 
 	_setup_actions() {
+		this.page.add_button(__("Home"), function () {
+			frappe.set_route("attendance-processor-home");
+		}, { icon: "home", btn_class: "btn-default" });
+
 		this.page.set_primary_action(__("Generate Summary"), () => this._onGenerate(), "refresh");
 	}
 
