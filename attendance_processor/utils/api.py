@@ -7,6 +7,8 @@ from attendance_processor.utils.processor import (
     get_leave_applications_lookup,
     get_short_leave_lookup,
     get_two_late_lookup,
+    get_shift_type_thresholds,
+    get_employee_checkins_lookup,
     analyse_employee,
 )
 from attendance_processor.utils.email_report import send_summary_email
@@ -90,8 +92,11 @@ def _run_analysis(from_date, to_date, employees=None):
     leave_lookup       = get_leave_applications_lookup(from_date, to_date)
     short_leave_lookup = get_short_leave_lookup(from_date, to_date)
     two_late_lookup    = get_two_late_lookup(from_date, to_date)
+    shift_thresholds   = get_shift_type_thresholds()
     all_records        = get_attendance_records(from_date, to_date,
                                                 employees=employees_list)
+    checkins_lookup    = get_employee_checkins_lookup(from_date, to_date,
+                                                      employees=employees_list)
 
     emp_data = _build_emp_data(all_records)
 
@@ -111,6 +116,8 @@ def _run_analysis(from_date, to_date, employees=None):
             emp_id, data["records"],
             missed_lookup, leave_lookup,
             short_leave_lookup, two_late_lookup,
+            checkins_lookup=checkins_lookup,
+            shift_thresholds=shift_thresholds,
         )
 
         total_issues = sum(len(v) for v in issues.values())
@@ -607,8 +614,11 @@ def get_email_send_preview(from_date, to_date, employees=None):
     leave_lookup       = get_leave_applications_lookup(from_date, to_date)
     short_leave_lookup = get_short_leave_lookup(from_date, to_date)
     two_late_lookup    = get_two_late_lookup(from_date, to_date)
+    shift_thresholds   = get_shift_type_thresholds()
     all_records        = get_attendance_records(from_date, to_date,
                                                 employees=employees_list)
+    checkins_lookup    = get_employee_checkins_lookup(from_date, to_date,
+                                                      employees=employees_list)
 
     emp_data   = _build_emp_data(all_records)
     active_ids = _get_active_employee_ids()
@@ -632,6 +642,8 @@ def get_email_send_preview(from_date, to_date, employees=None):
             emp_id, data["records"],
             missed_lookup, leave_lookup,
             short_leave_lookup, two_late_lookup,
+            checkins_lookup=checkins_lookup,
+            shift_thresholds=shift_thresholds,
         )
         total_issues = sum(len(v) for v in issues.values())
         if total_issues == 0:
@@ -669,8 +681,12 @@ def _do_send_emails(from_date, to_date, employee=None,
     leave_lookup       = get_leave_applications_lookup(from_date, to_date)
     short_leave_lookup = get_short_leave_lookup(from_date, to_date)
     two_late_lookup    = get_two_late_lookup(from_date, to_date)
+    shift_thresholds   = get_shift_type_thresholds()
+    employees_filter   = [employee] if employee else None
     all_records        = get_attendance_records(from_date, to_date,
                                                 employee=employee)
+    checkins_lookup    = get_employee_checkins_lookup(from_date, to_date,
+                                                      employees=employees_filter)
 
     emp_data   = _build_emp_data(all_records)
     active_ids = _get_active_employee_ids(employee=employee)
@@ -686,6 +702,8 @@ def _do_send_emails(from_date, to_date, employee=None,
                 emp_id, data["records"],
                 missed_lookup, leave_lookup,
                 short_leave_lookup, two_late_lookup,
+                checkins_lookup=checkins_lookup,
+                shift_thresholds=shift_thresholds,
             )
             send_summary_email(
                 emp_id, data["name"], issues, period_label,
@@ -758,7 +776,9 @@ def send_test_email_to_employee(employee, period_type="weekly",
     leave_lookup       = get_leave_applications_lookup(fd, td)
     short_leave_lookup = get_short_leave_lookup(fd, td)
     two_late_lookup    = get_two_late_lookup(fd, td)
+    shift_thresholds   = get_shift_type_thresholds()
     all_records        = get_attendance_records(fd, td, employees=[employee])
+    checkins_lookup    = get_employee_checkins_lookup(fd, td, employees=[employee])
 
     if not all_records:
         # No attendance records but still send to confirm email delivery
@@ -770,6 +790,8 @@ def send_test_email_to_employee(employee, period_type="weekly",
         employee, emp_records,
         missed_lookup, leave_lookup,
         short_leave_lookup, two_late_lookup,
+        checkins_lookup=checkins_lookup,
+        shift_thresholds=shift_thresholds,
     )
 
     recipient = frappe.db.get_value("Employee", employee, "user_id")

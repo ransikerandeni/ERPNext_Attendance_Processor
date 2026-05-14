@@ -1,6 +1,6 @@
 import frappe
 from frappe.utils import getdate
-from datetime import time, datetime
+from datetime import time, datetime, timedelta
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -122,6 +122,63 @@ def get_two_late_lookup(from_date, to_date):
     return result
 
 
+def get_shift_type_thresholds():
+    """
+    Return {shift_name: timedelta} for every Shift Type.
+    threshold = working_hours_threshold_for_absent hours
+                + custom_adjustment_threshold_for_absent minutes
+    """
+    records = frappe.db.get_all(
+        "Shift Type",
+        fields=[
+            "name",
+            "working_hours_threshold_for_absent",
+            "custom_adjustment_threshold_for_absent",
+        ],
+    )
+    result = {}
+    for r in records:
+        hours   = float(r.working_hours_threshold_for_absent or 0)
+        minutes = int(r.custom_adjustment_threshold_for_absent or 0)
+        result[r.name] = timedelta(hours=hours, minutes=minutes)
+    return result
+
+
+def get_employee_checkins_lookup(from_date, to_date, employees=None):
+    """
+    Return {(employee_id, attendance_name): [{"log_type": str, "time": datetime}, ...]}
+    for Employee Checkin records in the period that are linked to an Attendance record.
+    Records without an Attendance link are excluded.
+    """
+    start_dt = datetime.combine(getdate(from_date), time(0, 0, 0))
+    end_dt   = datetime.combine(getdate(to_date),   time(23, 59, 59))
+
+    filters = [
+        ["time", "between", [start_dt, end_dt]],
+        ["attendance", "is", "set"],
+    ]
+    if employees:
+        filters.append(["employee", "in", employees])
+
+    records = frappe.db.get_all(
+        "Employee Checkin",
+        filters=filters,
+        fields=["employee", "log_type", "time", "attendance"],
+        order_by="time asc",
+    )
+
+    result = {}
+    for r in records:
+        if not r.attendance:
+            continue
+        key = (r.employee, r.attendance)
+        result.setdefault(key, []).append({
+            "log_type": r.log_type or "IN",
+            "time":     r.time,
+        })
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Helper Functions
 # ---------------------------------------------------------------------------
@@ -190,6 +247,43 @@ def is_application_already_linked(rec):
     # if rec.get("custom_two_late_application"):
     #     return True
     return False
+
+
+def _is_in_only_missed_attendance(rec, checkins_lookup, shift_thresholds):
+    """
+    Return True when all Employee Checkins linked to this Attendance record are
+    Log Type=IN and the span between the first and last checkin is less than the
+    shift's absence threshold.
+
+    This detects the pattern where an employee taps the fingerprint reader
+    multiple times in quick succession (all IN, no OUT), causing ERPNext to
+    populate both in_time and out_time from the first/last IN scan while still
+    marking attendance Absent.
+
+    Returns False when no checkin data is available (safe default — avoids
+    false positives on manually-created Attendance records).
+    """
+    checkins = checkins_lookup.get((rec.employee, rec.name), [])
+    if not checkins:
+        return False
+
+    if any(c["log_type"] != "IN" for c in checkins):
+        return False
+
+    if len(checkins) < 2:
+        return True
+
+    times = sorted(c["time"] for c in checkins if c["time"] is not None)
+    if len(times) < 2:
+        return True
+
+    span      = times[-1] - times[0]
+    threshold = shift_thresholds.get(rec.shift) if rec.shift else None
+
+    if threshold is None:
+        return True
+
+    return span < threshold
 
 
 # ---------------------------------------------------------------------------
@@ -304,6 +398,7 @@ def classify_short_leave_records(pending_rows, emp_short_dates, emp_two_late):
 def analyse_employee(
     employee_id, att_records, missed_lookup, leave_lookup,
     short_leave_lookup, two_late_lookup,
+    checkins_lookup=None, shift_thresholds=None,
 ):
     """
     Run all 4 attendance checks for one employee.
@@ -341,8 +436,20 @@ def analyse_employee(
         out_time           = rec.out_time
 
         # ── CHECK 1: Missed Attendance Request ─────────────────────────────
-        # One punch is present and the other is missing
-        if (not in_time and out_time) or (in_time and not out_time):
+        # a) Exactly one of in_time / out_time is present (classic single punch).
+        # b) Both times are present but all linked Employee Checkins are Log
+        #    Type=IN and their span is below the shift's absence threshold —
+        #    i.e. multiple rapid IN-only fingerprint taps that produced a fake
+        #    out_time while attendance was still marked Absent.
+        if (
+            (not in_time and out_time) or (in_time and not out_time)
+            or (
+                in_time and out_time
+                and checkins_lookup is not None
+                and shift_thresholds is not None
+                and _is_in_only_missed_attendance(rec, checkins_lookup, shift_thresholds)
+            )
+        ):
             if not has_date_in_list(att_date, emp_missed_dates):
                 missed_req_issues.append(rec)
 

@@ -7,6 +7,8 @@ from attendance_processor.utils.processor import (
     get_leave_applications_lookup,
     get_short_leave_lookup,
     get_two_late_lookup,
+    get_shift_type_thresholds,
+    get_employee_checkins_lookup,
     analyse_employee,
 )
 from attendance_processor.utils.email_report import (
@@ -57,9 +59,11 @@ def _run_for_period(from_date, to_date, period_label):
     leave_lookup       = get_leave_applications_lookup(from_date, to_date)
     short_leave_lookup = get_short_leave_lookup(from_date, to_date)
     two_late_lookup    = get_two_late_lookup(from_date, to_date)
+    shift_thresholds   = get_shift_type_thresholds()
 
-    # 2. Fetch all attendance records for the period in one query
-    all_records = get_attendance_records(from_date, to_date)
+    # 2. Fetch all attendance and checkin records for the period in one query each
+    all_records     = get_attendance_records(from_date, to_date)
+    checkins_lookup = get_employee_checkins_lookup(from_date, to_date)
 
     # 3. Group records by employee
     emp_data = {}
@@ -89,6 +93,8 @@ def _run_for_period(from_date, to_date, period_label):
                 leave_lookup,
                 short_leave_lookup,
                 two_late_lookup,
+                checkins_lookup=checkins_lookup,
+                shift_thresholds=shift_thresholds,
             )
 
             send_summary_email(
