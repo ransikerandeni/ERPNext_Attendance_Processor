@@ -1016,3 +1016,127 @@ def send_test_approver_email(approver_user, from_date=None, to_date=None, lookba
             "status":  "error",
             "message": str(exc),
         }
+
+
+# ---------------------------------------------------------------------------
+# HR Report API — accessible to HR User and System Manager
+# ---------------------------------------------------------------------------
+
+_HR_ROLES = {"HR User", "System Manager"}
+
+
+@frappe.whitelist()
+def send_hr_individual_email(employee_id, from_date, to_date):
+    """
+    Send an attendance summary email to a single employee and log the action
+    to HR Email Log.  Accessible to HR User and System Manager.
+
+    Args:
+        employee_id: str  — Employee document name
+        from_date:   str  — "YYYY-MM-DD"
+        to_date:     str  — "YYYY-MM-DD"
+
+    Returns:
+        {"status": "sent"|"error", "message": str}
+    """
+    if not (_HR_ROLES & set(frappe.get_roles())):
+        frappe.throw(frappe._("Not permitted"), frappe.PermissionError)
+
+    from attendance_processor.utils.email_report import send_summary_email
+
+    from_date = getdate(from_date)
+    to_date   = getdate(to_date)
+    period_label = f"{from_date} to {to_date} (Custom)"
+
+    employee_name = frappe.db.get_value("Employee", employee_id, "employee_name") or employee_id
+    email_address = frappe.db.get_value("Employee", employee_id, "user_id") or ""
+
+    missed_lookup      = get_missed_requests_lookup(from_date, to_date)
+    leave_lookup       = get_leave_applications_lookup(from_date, to_date)
+    short_leave_lookup = get_short_leave_lookup(from_date, to_date)
+    two_late_lookup    = get_two_late_lookup(from_date, to_date)
+    shift_thresholds   = get_shift_type_thresholds()
+    all_records        = get_attendance_records(from_date, to_date, employee=employee_id)
+    checkins_lookup    = get_employee_checkins_lookup(from_date, to_date,
+                                                      employees=[employee_id])
+
+    emp_data = _build_emp_data(all_records)
+    data     = emp_data.get(employee_id, {"records": [], "name": employee_name})
+
+    issues = analyse_employee(
+        employee_id, data["records"],
+        missed_lookup, leave_lookup,
+        short_leave_lookup, two_late_lookup,
+        checkins_lookup=checkins_lookup,
+        shift_thresholds=shift_thresholds,
+    )
+    issue_count = sum(len(v) for v in issues.values())
+
+    status = "error"
+    try:
+        send_summary_email(employee_id, employee_name, issues, period_label,
+                           send_even_if_no_issues=True)
+        status = "sent"
+    except Exception as exc:
+        frappe.log_error(
+            f"HR Report: email send failed for {employee_id} ({employee_name}): {exc}",
+            title="HR Report: Email Send Failed",
+        )
+
+    frappe.get_doc({
+        "doctype":       "HR Email Log",
+        "employee":      employee_id,
+        "employee_name": employee_name,
+        "from_date":     from_date,
+        "to_date":       to_date,
+        "period_label":  period_label,
+        "issue_count":   issue_count,
+        "email_address": email_address,
+        "status":        status,
+        "sent_by":       frappe.session.user,
+        "sent_on":       frappe.utils.now_datetime(),
+    }).insert(ignore_permissions=True)
+    frappe.db.commit()
+
+    if status == "error":
+        return {
+            "status":  "error",
+            "message": f"Email could not be sent to {employee_name}. Check the Error Log for details.",
+        }
+    return {
+        "status":  "sent",
+        "message": f"Email sent to {employee_name} ({issue_count} issue(s) found).",
+    }
+
+
+@frappe.whitelist()
+def get_hr_email_log(from_date=None, to_date=None, employee=None):
+    """
+    Return the HR email send history from HR Email Log.
+    Accessible to HR User and System Manager.
+
+    Returns:
+        List of dicts ordered by sent_on descending (max 200 records).
+    """
+    if not (_HR_ROLES & set(frappe.get_roles())):
+        frappe.throw(frappe._("Not permitted"), frappe.PermissionError)
+
+    filters = {}
+    if employee:
+        filters["employee"] = employee
+    if from_date:
+        filters["from_date"] = [">=", getdate(from_date)]
+    if to_date:
+        filters["to_date"] = ["<=", getdate(to_date)]
+
+    return frappe.get_all(
+        "HR Email Log",
+        filters=filters,
+        fields=[
+            "employee", "employee_name", "from_date", "to_date",
+            "period_label", "issue_count", "email_address",
+            "status", "sent_by", "sent_on",
+        ],
+        order_by="sent_on desc",
+        limit=200,
+    )

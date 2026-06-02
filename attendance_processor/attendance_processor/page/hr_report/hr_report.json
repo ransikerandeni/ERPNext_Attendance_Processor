@@ -1,0 +1,22 @@
+{
+ "creation": "2026-06-02 00:00:00.000000",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2026-06-02 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Attendance Processor",
+ "name": "hr-report",
+ "owner": "Administrator",
+ "page_name": "hr-report",
+ "published": 0,
+ "roles": [
+  {
+   "role": "HR User"
+  },
+  {
+   "role": "System Manager"
+  }
+ ],
+ "title": "HR Report"
+}

@@ -23,6 +23,7 @@ class AttendanceProcessorHome {
 
 	_render() {
 		var isManager    = frappe.user_roles.includes("System Manager");
+		var isHRUser     = frappe.user_roles.includes("HR User");
 		var isApprover   = frappe.user_roles.includes("Department Head Attendance Appr");
 		var canSeeApprover = isManager || isApprover;
 
@@ -41,6 +42,22 @@ class AttendanceProcessorHome {
 				),
 			},
 		];
+
+		// HR Report card visible to HR User or System Manager
+		if (isHRUser || isManager) {
+			cards.push({
+				route:       "hr-report",
+				icon:        "📧",
+				color:       "#D97706",
+				light:       "#FFFBEB",
+				border:      "#FDE68A",
+				title:       __("HR Report"),
+				description: __(
+					"Send attendance summary emails to individual employees and " +
+					"view the full history of sent reports."
+				),
+			});
+		}
 
 		// Approver Summary only for System Manager or Department Head Attendance Appr
 		if (canSeeApprover) {
