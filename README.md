@@ -13,12 +13,16 @@
    - [Email Settings](#1-email-settings)
    - [Employee Records](#2-employee-records)
    - [Shift Configuration](#3-shift-configuration)
-   - [Scheduled Jobs](#4-scheduled-jobs)
+   - [Attendance Processor Settings](#4-attendance-processor-settings)
+   - [Scheduled Jobs](#5-scheduled-jobs)
 5. [Desk Pages](#desk-pages)
+   - [Attendance Processor Home](#attendance-processor-home)
    - [Attendance Summary Report](#attendance-summary-report)
+   - [HR Report](#hr-report)
    - [Approver Summary](#approver-summary)
 6. [User Guide](#user-guide)
    - [Attendance Summary Report (HR / System Manager)](#attendance-summary-report-hr--system-manager)
+   - [HR Report (HR User / System Manager)](#hr-report-hr-user--system-manager)
    - [Approver Summary (Leave Approvers)](#approver-summary-leave-approvers)
    - [Automated Weekly & Monthly Emails](#automated-weekly--monthly-emails)
 7. [Business Rules & Issue Classification](#business-rules--issue-classification)
@@ -33,10 +37,15 @@
 |---|---|
 | **Attendance Analysis** | Scans ERPNext Attendance records and cross-checks them against filed applications to detect gaps |
 | **4-Check Issue Detection** | Missed Attendance Requests · Leave Applications · Short Leave Applications · Two Late → Half Day conversions |
+| **Rapid Tap Detection** | Identifies IN-only rapid fingerprint taps (missing OUT punch) as missed attendance |
 | **Personalised Email Summaries** | HTML email sent to each employee listing only their outstanding items |
-| **Weekly & Monthly Scheduled Emails** | Automatic background jobs send summaries for the previous week and previous month |
+| **Per-Employee Email (HR Report)** | HR Users can send individual attendance summary emails directly from the HR Report page |
+| **Email Send History** | Full audit log of all individually sent emails, viewable from the HR Report Send History tab |
+| **Weekly & Monthly Scheduled Emails** | Automatic background jobs send summaries for the previous week and previous month, controlled via Attendance Processor Settings |
 | **Attendance Summary Report** | Interactive desk page for HR to preview results, filter by employee or date range, and trigger bulk email sends |
+| **HR Report** | Advanced desk page with summary stat cards, per-employee email sending, search/sort/filter toolbar, and send history |
 | **Approver Summary** | Desk page for leave approvers to see all pending applications belonging to their direct reports, grouped by type |
+| **Attendance Processor Settings** | Single-document settings page to configure email templates, scheduled job behaviour, and approver summary lookback period |
 | **Role-Based Access** | System Managers and HR Managers see all data; leave approvers see only their own team |
 
 ---
@@ -139,27 +148,40 @@ If your organisation uses different shifts or time windows, update the `SHIFT_WI
 | `SHORT_LEAVE_MONTHLY_LIMIT` | 2 | Maximum short-leave allowance per employee per calendar month |
 | `TWO_LATE_MONTHLY_LIMIT` | 2 | Maximum Two Late applications per employee per calendar month |
 
-### 4. Scheduled Jobs
+### 4. Attendance Processor Settings
 
-The app ships two scheduled jobs. To enable automatic email dispatching, add the following to `hooks.py` in the app:
+After installation, open **Attendance Processor Settings** (search for it in the desk or navigate to it from the module). This single-document settings page lets you configure:
+
+| Setting | Description |
+|---|---|
+| **Email Intro Text** | Opening paragraph of the employee attendance summary email |
+| **Email No Issues Text** | Body text sent to employees with no outstanding items |
+| **Email Signature** | Sign-off block appended to every employee email |
+| **Email Footer Note** | Small-print disclaimer at the bottom of employee emails |
+| **Approver Email Intro Text** | Opening paragraph of the approver summary email |
+| **Approver Email No Pending Text** | Body text sent to approvers with no pending applications |
+| **Monthly Send Day** | Day of the month (1–28) on which the monthly summary job fires |
+| **Approver Summary Lookback Days** | How many days back the approver summary scans for pending applications (minimum 1) |
+
+All fields fall back to built-in defaults if left blank.
+
+### 5. Scheduled Jobs
+
+The app ships a single **hourly** scheduled job that reads **Attendance Processor Settings** to decide whether to fire the weekly and/or monthly report jobs. This is already registered in `hooks.py` — no manual edits required after installation:
 
 ```python
 scheduler_events = {
-    "weekly": [
-        "attendance_processor.scheduler.send_weekly_attendance_summary"
-    ],
-    "monthly": [
-        "attendance_processor.scheduler.send_monthly_attendance_summary"
+    "hourly": [
+        "attendance_processor.scheduler.run_scheduled_reports",
     ],
 }
 ```
 
-Then run `bench restart` for changes to take effect.
+Control when automatic emails are sent by configuring the relevant fields in **Attendance Processor Settings** (e.g. *Monthly Send Day*).
 
-| Function | Recommended Schedule | Description |
+| Function | Trigger | Description |
 |---|---|---|
-| `attendance_processor.scheduler.send_weekly_attendance_summary` | Weekly (Monday morning) | Sends email summaries for the previous Mon–Sun week |
-| `attendance_processor.scheduler.send_monthly_attendance_summary` | Monthly (1st of the month) | Sends email summaries for the previous calendar month |
+| `attendance_processor.scheduler.run_scheduled_reports` | Every hour (checks settings) | Fires weekly and/or monthly email summary jobs when the configured schedule is reached |
 
 ---
 
@@ -171,11 +193,13 @@ All pages are accessible only to authenticated ERPNext users. Navigating directl
 |---|---|---|
 | Attendance Processor Home | `/app/attendance-processor-home` | All authenticated users |
 | Attendance Summary Report | `/app/attendance-summary-report` | System Manager, HR Manager |
+| HR Report | `/app/hr-report` | System Manager, HR User |
 | Approver Summary | `/app/approver-summary` | System Manager, HR Manager, Department Head Attendance Appr |
 
 > **Example full URLs** (replace `<your-site>` with your actual site domain, e.g. `ucsctest_site.com`):
 > - `https://<your-site>/app/attendance-processor-home`
 > - `https://<your-site>/app/attendance-summary-report`
+> - `https://<your-site>/app/hr-report`
 > - `https://<your-site>/app/approver-summary`
 
 ### Attendance Processor Home
@@ -230,6 +254,76 @@ The **Send Emails** button (visible only to System Managers) opens a confirmatio
 
 ---
 
+### HR Report (HR User / System Manager)
+
+**Navigate to:** ERPNext Desk → *Attendance Processor Home* → **HR Report** card
+or go directly to `/app/hr-report`
+(full URL: `https://<your-site>/app/hr-report`)
+
+The HR Report page is an advanced dashboard for HR Users. It combines attendance analysis with per-employee email sending and a full email send history.
+
+#### Filter Bar
+
+The same **Period**, **From Date**, **To Date**, and **Add Employee** controls as the Attendance Summary Report. The page auto-loads with *Last Month* pre-selected.
+
+#### Tabs
+
+The page is split into two tabs:
+
+| Tab | Description |
+|---|---|
+| **Attendance Report** | Analysis results with stat cards, search/sort toolbar, and per-employee accordion cards |
+| **Send History** | Full audit log of all individually sent emails (badge shows total count) |
+
+#### Summary Stat Cards
+
+After clicking **Preview Report**, six stat cards appear above the results:
+
+| Card | What it shows |
+|---|---|
+| Employees Analysed | Total active employees in the date range |
+| Employees with Issues | Count of employees who have at least one outstanding item |
+| Missed Attendance | Total missed attendance records across all employees |
+| Leave Applications | Total outstanding leave application records |
+| Short Leave | Total outstanding short leave records |
+| Two Late → Half Day | Total two-late-to-half-day records |
+
+#### Toolbar
+
+| Control | Description |
+|---|---|
+| **Search box** | Filter the employee list by name or employee ID |
+| **Sort** | Order by Issues High→Low, Issues Low→High, Name A→Z, or Name Z→A |
+| **Expand All / Collapse All** | Expand or collapse all employee accordion cards at once |
+| **Period & count display** | Shows the active date range and how many employees are currently visible |
+
+#### Per-Employee Email Sending
+
+Each employee card in the HR Report has a **Send Email** button. Clicking it opens a confirmation dialog showing the employee name and date range. On confirmation:
+
+- The app calls `send_hr_individual_email` for that employee.
+- A success or error alert is shown immediately.
+- The **Send History** tab is refreshed automatically in the background.
+
+#### Send History Tab
+
+The Send History tab shows a table of all individually sent emails, including:
+
+| Column | Description |
+|---|---|
+| Employee Name | Full name of the employee |
+| Employee ID | ERPNext employee ID |
+| From Date / To Date | The analysis period that was emailed |
+| Issues | Number of outstanding issues included in the email |
+| Email | The address the email was sent to |
+| Status | `sent` (green) or error indicator (red) |
+| Sent By | The logged-in user who triggered the send |
+| Sent On | Timestamp of the send |
+
+Click **Refresh** to reload the history at any time.
+
+---
+
 ### Approver Summary (Leave Approvers)
 
 **Navigate to:** ERPNext Desk → *Attendance Processor Home* → **Approver Summary** card
@@ -275,7 +369,7 @@ Only non-cancelled (`docstatus != 2`) records with the following statuses are sh
 
 ### Automated Weekly & Monthly Emails
 
-When the scheduled jobs are enabled (see [Scheduled Jobs](#4-scheduled-jobs)), employees automatically receive an HTML email summarising their outstanding attendance items for:
+When the scheduled job is active (see [Scheduled Jobs](#5-scheduled-jobs)), employees automatically receive an HTML email summarising their outstanding attendance items for:
 
 - **The previous Monday–Sunday week** (weekly job)
 - **The previous calendar month** (monthly job)
@@ -296,6 +390,7 @@ The analysis engine (`utils/processor.py`) applies the following checks in order
 
 | Check | Trigger condition | Issue type raised |
 |---|---|---|
+| **0 — Rapid IN tap** | Only an IN punch present with no OUT punch (rapid fingerprint tap) | `Missed Attendance Request` |
 | **1 — Missed Attendance** | One punch present, the other missing (in XOR out) | `Missed Attendance Request` |
 | **2 — Leave Application (absent)** | Status = Absent, no in/out times, no existing leave cover | `Leave Application` |
 | **2b — Leave Application (half day)** | Status = Half Day, remarks contain `"Half Day"` but not `"Short Leave"`, not covered by leave/short-leave/two-late | `Leave Application` |
@@ -307,13 +402,16 @@ The analysis engine (`utils/processor.py`) applies the following checks in order
 
 ## Role & Permission Matrix
 
-| Feature | System Manager | HR Manager | Leave Approver | Employee |
-|---|---|---|---|---|
-| Attendance Summary Report — view | ✅ | ✅ | ❌ | ❌ |
-| Attendance Summary Report — send emails | ✅ | ❌ | ❌ | ❌ |
-| Approver Summary — view all approvers | ✅ | ✅ | ❌ | ❌ |
-| Approver Summary — view own team | ✅ | ✅ | ✅ | ❌ |
-| Automated email recipient | ✅ | ✅ | ✅ | ✅ (if active) |
+| Feature | System Manager | HR Manager | HR User | Leave Approver | Employee |
+|---|---|---|---|---|---|
+| Attendance Summary Report — view | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Attendance Summary Report — send emails | ✅ | ❌ | ❌ | ❌ | ❌ |
+| HR Report — view & analyse | ✅ | ❌ | ✅ | ❌ | ❌ |
+| HR Report — send individual emails | ✅ | ❌ | ✅ | ❌ | ❌ |
+| HR Report — view send history | ✅ | ❌ | ✅ | ❌ | ❌ |
+| Approver Summary — view all approvers | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Approver Summary — view own team | ✅ | ✅ | ❌ | ✅ | ❌ |
+| Automated email recipient | ✅ | ✅ | ✅ | ✅ | ✅ (if active) |
 
 ---
 
