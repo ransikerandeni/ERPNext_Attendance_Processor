@@ -22,9 +22,10 @@ class AttendanceProcessorHome {
 	}
 
 	_render() {
-		var isManager    = frappe.user_roles.includes("System Manager");
-		var isHRUser     = frappe.user_roles.includes("HR User");
-		var isApprover   = frappe.user_roles.includes("Department Head Attendance Appr");
+		var isManager      = frappe.user_roles.includes("System Manager");
+		var isHRUser       = frappe.user_roles.includes("HR User");
+		var isHRManager    = frappe.user_roles.includes("HR Manager");
+		var isApprover     = frappe.user_roles.includes("Department Head Attendance Appr");
 		var canSeeApprover = isManager || isApprover;
 
 		// Each card definition ─────────────────────────────────────────────
@@ -55,6 +56,21 @@ class AttendanceProcessorHome {
 				description: __(
 					"Send attendance summary emails to individual employees and " +
 					"view the full history of sent reports."
+				),
+			});
+		}
+
+		// Leave Balance Report card visible to HR Manager, HR User, or System Manager
+		if (isHRUser || isHRManager || isManager) {
+			cards.push({
+				route:       "leave-balance-report",
+				icon:        "📊",
+				color:       "#0D9488",
+				light:       "#F0FDFA",
+				border:      "#99F6E4",
+				title:       __("Leave Balance Report"),
+				description: __(
+					"View Casual and Casual (Contract) leave balances for Contract employees."
 				),
 			});
 		}

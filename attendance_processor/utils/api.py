@@ -1109,6 +1109,209 @@ def send_hr_individual_email(employee_id, from_date, to_date):
     }
 
 
+# ---------------------------------------------------------------------------
+# Leave Balance Report API
+# ---------------------------------------------------------------------------
+
+@frappe.whitelist()
+def get_leave_balance_data(month, year):
+    """
+    Return Casual and Casual (Contract) leave balances for all active
+    Contract / Contract Basis employees in the given month and year.
+
+    Args:
+        month: int or str  1–12
+        year:  int or str  e.g. 2026
+
+    Returns:
+        List of dicts sorted by employee_name ascending.
+        Only employees with at least one leave allocation in the period
+        are included.
+    """
+    import calendar
+    from datetime import date
+
+    month = int(month)
+    year  = int(year)
+    from_date = date(year, month, 1)
+    to_date   = date(year, month, calendar.monthrange(year, month)[1])
+
+    employees = frappe.get_all(
+        "Employee",
+        filters={
+            "status":          "Active",
+            "employment_type": ["in", ["Contract", "Contract Basis"]],
+        },
+        fields=["name", "employee_name", "department", "employment_type"],
+        order_by="employee_name asc",
+    )
+
+    LEAVE_TYPES = [
+        ("Casual",            "casual"),
+        ("Casual (Contract)", "casual_contract"),
+    ]
+
+    results = []
+    for emp in employees:
+        row = {
+            "employee_id":     emp.name,
+            "employee_name":   emp.employee_name,
+            "department":      emp.department,
+            "employment_type": emp.employment_type,
+            "casual":          {"allocated": 0.0, "taken": 0.0, "balance": 0.0},
+            "casual_contract": {"allocated": 0.0, "taken": 0.0, "balance": 0.0},
+            "total_allocated": 0.0,
+            "total_taken":     0.0,
+            "total_balance":   0.0,
+        }
+
+        has_allocation = False
+        for leave_type, key in LEAVE_TYPES:
+            alloc = frappe.db.sql("""
+                SELECT SUM(total_leaves_allocated)
+                FROM `tabLeave Allocation`
+                WHERE employee   = %(employee)s
+                  AND leave_type = %(leave_type)s
+                  AND docstatus  = 1
+                  AND from_date <= %(to_date)s
+                  AND to_date   >= %(from_date)s
+            """, {
+                "employee":   emp.name,
+                "leave_type": leave_type,
+                "from_date":  from_date,
+                "to_date":    to_date,
+            })[0][0]
+            allocated = float(alloc or 0)
+
+            taken_raw = frappe.db.sql("""
+                SELECT SUM(total_leave_days)
+                FROM `tabLeave Application`
+                WHERE employee   = %(employee)s
+                  AND leave_type = %(leave_type)s
+                  AND status    IN ('Approved', 'Open')
+                  AND docstatus != 2
+                  AND from_date >= %(from_date)s
+                  AND to_date   <= %(to_date)s
+            """, {
+                "employee":   emp.name,
+                "leave_type": leave_type,
+                "from_date":  from_date,
+                "to_date":    to_date,
+            })[0][0]
+            taken   = float(taken_raw or 0)
+            balance = max(0.0, allocated - taken)
+
+            if allocated > 0:
+                has_allocation = True
+
+            row[key] = {"allocated": allocated, "taken": taken, "balance": balance}
+
+        if not has_allocation:
+            continue
+
+        row["total_allocated"] = (
+            row["casual"]["allocated"] + row["casual_contract"]["allocated"]
+        )
+        row["total_taken"] = (
+            row["casual"]["taken"] + row["casual_contract"]["taken"]
+        )
+        row["total_balance"] = (
+            row["casual"]["balance"] + row["casual_contract"]["balance"]
+        )
+        results.append(row)
+
+    results.sort(key=lambda x: (x["employee_name"] or "").lower())
+    return results
+
+
+@frappe.whitelist()
+def export_leave_balance_excel(month, year):
+    """
+    Generate an XLSX workbook for the leave balance report and return it
+    as a base64-encoded payload for browser download.
+
+    Returns:
+        {"filename": str, "content_type": str, "content": str (base64)}
+    """
+    import base64, io, calendar
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    month_int  = int(month)
+    year_int   = int(year)
+    month_name = calendar.month_name[month_int]
+
+    data = get_leave_balance_data(month, year)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Leave Balance {month_name} {year_int}"
+
+    headers = [
+        "#", "Employee ID", "Employee Name", "Department", "Employment Type",
+        "Casual Allocated", "Casual Taken", "Casual Balance",
+        "Casual (Contract) Allocated", "Casual (Contract) Taken",
+        "Casual (Contract) Balance", "Total Balance",
+    ]
+    ws.append(headers)
+
+    header_fill = PatternFill("solid", fgColor="1E40AF")
+    for cell in ws[1]:
+        cell.font      = Font(bold=True, color="FFFFFF")
+        cell.fill      = header_fill
+        cell.alignment = Alignment(horizontal="left")
+
+    green_fill = PatternFill("solid", fgColor="DCFCE7")
+    red_fill   = PatternFill("solid", fgColor="FEE2E2")
+    alt_fills  = [
+        PatternFill("solid", fgColor="EFF6FF"),
+        PatternFill("solid", fgColor="FFFFFF"),
+    ]
+    BALANCE_COLS = [8, 11, 12]  # 1-based: Casual Bal, CC Bal, Total Bal
+
+    for i, emp in enumerate(data):
+        row_fill = alt_fills[i % 2]
+        row_data = [
+            i + 1,
+            emp["employee_id"],
+            emp["employee_name"],
+            emp["department"]     or "",
+            emp["employment_type"] or "",
+            emp["casual"]["allocated"],
+            emp["casual"]["taken"],
+            emp["casual"]["balance"],
+            emp["casual_contract"]["allocated"],
+            emp["casual_contract"]["taken"],
+            emp["casual_contract"]["balance"],
+            emp["total_balance"],
+        ]
+        ws.append(row_data)
+        data_row = ws[ws.max_row]
+        for cell in data_row:
+            cell.fill = row_fill
+        for col_num in BALANCE_COLS:
+            cell      = ws.cell(row=ws.max_row, column=col_num)
+            cell.fill = green_fill if (cell.value or 0) > 0 else red_fill
+
+    col_widths = {
+        "A": 5,  "B": 16, "C": 28, "D": 22, "E": 18,
+        "F": 18, "G": 14, "H": 16,
+        "I": 28, "J": 26, "K": 28, "L": 16,
+    }
+    for col, w in col_widths.items():
+        ws.column_dimensions[col].width = w
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+
+    return {
+        "filename":     f"Leave_Balance_{month_name}_{year_int}.xlsx",
+        "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "content":      b64,
+    }
+
+
 @frappe.whitelist()
 def get_hr_email_log(from_date=None, to_date=None, employee=None):
     """
