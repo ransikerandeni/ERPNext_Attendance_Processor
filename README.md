@@ -9,25 +9,28 @@
 1. [Features](#features)
 2. [Prerequisites](#prerequisites)
 3. [Installation](#installation)
-4. [Configuration & Setup](#configuration--setup)
+4. [Updating the App](#updating-the-app)
+5. [Configuration & Setup](#configuration--setup)
    - [Email Settings](#1-email-settings)
    - [Employee Records](#2-employee-records)
    - [Shift Configuration](#3-shift-configuration)
    - [Attendance Processor Settings](#4-attendance-processor-settings)
    - [Scheduled Jobs](#5-scheduled-jobs)
-5. [Desk Pages](#desk-pages)
+6. [Desk Pages](#desk-pages)
    - [Attendance Processor Home](#attendance-processor-home)
    - [Attendance Summary Report](#attendance-summary-report)
    - [HR Report](#hr-report)
    - [Approver Summary](#approver-summary)
-6. [User Guide](#user-guide)
+   - [Leave Balance Report](#leave-balance-report)
+7. [User Guide](#user-guide)
    - [Attendance Summary Report (HR / System Manager)](#attendance-summary-report-hr--system-manager)
    - [HR Report (HR User / System Manager)](#hr-report-hr-user--system-manager)
    - [Approver Summary (Leave Approvers)](#approver-summary-leave-approvers)
+   - [Leave Balance Report (HR / System Manager)](#leave-balance-report-hr--system-manager)
    - [Automated Weekly & Monthly Emails](#automated-weekly--monthly-emails)
-7. [Business Rules & Issue Classification](#business-rules--issue-classification)
-8. [Role & Permission Matrix](#role--permission-matrix)
-9. [Uninstalling](#uninstalling)
+8. [Business Rules & Issue Classification](#business-rules--issue-classification)
+9. [Role & Permission Matrix](#role--permission-matrix)
+10. [Uninstalling](#uninstalling)
 
 ---
 
@@ -45,6 +48,7 @@
 | **Attendance Summary Report** | Interactive desk page for HR to preview results, filter by employee or date range, and trigger bulk email sends |
 | **HR Report** | Advanced desk page with summary stat cards, per-employee email sending, search/sort/filter toolbar, and send history |
 | **Approver Summary** | Desk page for leave approvers to see all pending applications belonging to their direct reports, grouped by type |
+| **Leave Balance Report** | Desk page for HR to view Casual and Casual (Contract) leave allocations, taken days, and remaining balances for all Contract employees, with Excel export |
 | **Attendance Processor Settings** | Single-document settings page to configure email templates, scheduled job behaviour, and approver summary lookback period |
 | **Role-Based Access** | System Managers and HR Managers see all data; leave approvers see only their own team |
 
@@ -105,6 +109,52 @@ bench restart
 ```
 
 After these steps the app is live. Navigate to your ERPNext desk to access the new pages.
+
+---
+
+## Updating the App
+
+Use these steps whenever a new version is released on GitHub.
+
+### 1 — Pull the latest code
+
+```bash
+cd /home/frappe-user/frappe-bench/apps/attendance_processor
+git pull upstream main
+```
+
+> If your remote is named differently (e.g. `origin`), replace `upstream` with the correct remote name. Run `git remote -v` to check.
+
+### 2 — Run database migration
+
+```bash
+cd /home/frappe-user/frappe-bench
+bench --site <your-site-name> migrate
+```
+
+### 3 — Rebuild front-end assets
+
+```bash
+bench build --app attendance_processor
+```
+
+### 4 — Restart the bench
+
+```bash
+bench restart
+```
+
+All four steps together in one block:
+
+```bash
+cd /home/frappe-user/frappe-bench/apps/attendance_processor && git pull upstream main
+cd /home/frappe-user/frappe-bench
+bench --site <your-site-name> migrate
+bench build --app attendance_processor
+bench restart
+```
+
+> **Tip:** To find your site name run `ls sites/` from the bench root — ignore `assets` and `apps.txt`.
 
 ---
 
@@ -195,16 +245,22 @@ All pages are accessible only to authenticated ERPNext users. Navigating directl
 | Attendance Summary Report | `/app/attendance-summary-report` | System Manager, HR Manager |
 | HR Report | `/app/hr-report` | System Manager, HR User |
 | Approver Summary | `/app/approver-summary` | System Manager, HR Manager, Department Head Attendance Appr |
+| Leave Balance Report | `/app/leave-balance-report` | System Manager, HR Manager, HR User |
 
 > **Example full URLs** (replace `<your-site>` with your actual site domain, e.g. `ucsctest_site.com`):
 > - `https://<your-site>/app/attendance-processor-home`
 > - `https://<your-site>/app/attendance-summary-report`
 > - `https://<your-site>/app/hr-report`
 > - `https://<your-site>/app/approver-summary`
+> - `https://<your-site>/app/leave-balance-report`
 
 ### Attendance Processor Home
 
-The Home page is the recommended entry point for all users. It displays role-aware cards that link to the pages the current user is permitted to access. The **Attendance Summary Report** card is visible to all users; the **Approver Summary** card is shown only to System Managers and users with the `Department Head Attendance Appr` role.
+The Home page is the recommended entry point for all users. It displays role-aware cards that link to the pages the current user is permitted to access. The **Attendance Summary Report** card is always visible; the **Approver Summary** card is shown only to System Managers and users with the `Department Head Attendance Appr` role; the **Leave Balance Report** card is visible to HR Manager, HR User, and System Manager.
+
+### Leave Balance Report
+
+The Leave Balance Report page shows a month-by-month snapshot of Casual and Casual (Contract) leave allocations, taken days, and remaining balances for all active Contract and Contract Basis employees. It also supports Excel export.
 
 ---
 
@@ -367,6 +423,80 @@ Only non-cancelled (`docstatus != 2`) records with the following statuses are sh
 
 ---
 
+### Leave Balance Report (HR / System Manager)
+
+**Navigate to:** ERPNext Desk → *Attendance Processor Home* → **Leave Balance Report** card
+or go directly to `/app/leave-balance-report`
+(full URL: `https://<your-site>/app/leave-balance-report`)
+
+This page provides a snapshot of leave entitlements and usage for all active Contract and Contract Basis employees for a selected month.
+
+#### Filter Bar
+
+| Control | Description |
+|---|---|
+| **Month** | Select dropdown — January through December |
+| **Year** | Integer field — enter the target year (e.g. 2026) |
+
+#### Generating a Report
+
+1. Select the **Month** and **Year** from the filter bar.
+2. Click **Preview Report**.
+3. Results load immediately — one row per employee who has at least one leave allocation in the period.
+
+#### Summary Stat Cards
+
+Four stat cards appear above the results table:
+
+| Card | What it shows |
+|---|---|
+| Total Employees | Number of Contract / Contract Basis employees with allocations |
+| Total Allocated | Sum of all leave days allocated across both leave types |
+| Total Taken | Sum of all leave days taken (Approved or Open applications) |
+| Total Remaining | Sum of remaining leave balance across all employees |
+
+#### Search & Filter Toolbar
+
+| Control | Description |
+|---|---|
+| **Search box** | Filter rows by employee name or employee ID (client-side, instant) |
+| **Department** | Dropdown populated from the data — filter to one department |
+| **Employment Type** | Filter by Contract or Contract Basis |
+
+All filters are applied client-side without a server round-trip.
+
+#### Results Table
+
+The scrollable table contains the following columns:
+
+| Column | Description |
+|---|---|
+| # | Row number |
+| Employee ID | ERPNext employee ID |
+| Employee Name | Full name |
+| Department | Employee's department |
+| Employment Type | Contract or Contract Basis |
+| Casual Allocated | Leave days allocated under the *Casual* leave type |
+| Casual Taken | Leave days taken under *Casual* |
+| Casual Balance | Remaining *Casual* days — **green** if > 0, **red** if 0 |
+| Casual (Contract) Allocated | Leave days allocated under *Casual (Contract)* |
+| Casual (Contract) Taken | Leave days taken under *Casual (Contract)* |
+| Casual (Contract) Balance | Remaining *Casual (Contract)* days — **green** if > 0, **red** if 0 |
+| Total Balance | Combined remaining balance (bold) — **green** if > 0, **red** if 0 |
+
+#### Exporting to Excel
+
+Click **Export Excel** to download an `.xlsx` file. The workbook contains:
+
+- Dark-blue header row with white bold text
+- Alternating light-blue / white data rows
+- Green fill on balance cells with a remaining balance > 0; red fill on zero-balance cells
+- Auto-fitted column widths
+
+Filename format: `Leave_Balance_<MonthName>_<Year>.xlsx` (e.g. `Leave_Balance_June_2026.xlsx`).
+
+---
+
 ### Automated Weekly & Monthly Emails
 
 When the scheduled job is active (see [Scheduled Jobs](#5-scheduled-jobs)), employees automatically receive an HTML email summarising their outstanding attendance items for:
@@ -411,6 +541,7 @@ The analysis engine (`utils/processor.py`) applies the following checks in order
 | HR Report — view send history | ✅ | ❌ | ✅ | ❌ | ❌ |
 | Approver Summary — view all approvers | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Approver Summary — view own team | ✅ | ✅ | ❌ | ✅ | ❌ |
+| Leave Balance Report — view & export | ✅ | ✅ | ✅ | ❌ | ❌ |
 | Automated email recipient | ✅ | ✅ | ✅ | ✅ | ✅ (if active) |
 
 ---
