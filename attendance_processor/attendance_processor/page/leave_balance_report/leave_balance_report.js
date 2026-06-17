@@ -282,9 +282,9 @@ class LeaveBalanceReport {
 
 		var headers_html = [
 			"#", "Employee ID", "Employee Name", "Department", "Employment Type",
-			"Casual Allocated", "Casual Taken", "Casual Balance",
-			"Casual (Contract) Allocated", "Casual (Contract) Taken",
-			"Casual (Contract) Balance", "Total Balance",
+			"Casual Leave Allocated", "Casual Leave Taken", "Casual Leave Balance",
+			"Casual Leave (Contract) Allocated", "Casual Leave (Contract) Taken",
+			"Casual Leave (Contract) Balance", "Total Balance",
 		].map(TH).join("");
 
 		var $wrap = $(`

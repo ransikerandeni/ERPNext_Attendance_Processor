@@ -1147,8 +1147,8 @@ def get_leave_balance_data(month, year):
     )
 
     LEAVE_TYPES = [
-        ("Casual",            "casual"),
-        ("Casual (Contract)", "casual_contract"),
+        ("Casual Leave",            "casual"),
+        ("Casual Leave (Contract)", "casual_contract"),
     ]
 
     results = []
@@ -1249,9 +1249,9 @@ def export_leave_balance_excel(month, year):
 
     headers = [
         "#", "Employee ID", "Employee Name", "Department", "Employment Type",
-        "Casual Allocated", "Casual Taken", "Casual Balance",
-        "Casual (Contract) Allocated", "Casual (Contract) Taken",
-        "Casual (Contract) Balance", "Total Balance",
+        "Casual Leave Allocated", "Casual Leave Taken", "Casual Leave Balance",
+        "Casual Leave (Contract) Allocated", "Casual Leave (Contract) Taken",
+        "Casual Leave (Contract) Balance", "Total Balance",
     ]
     ws.append(headers)
 
